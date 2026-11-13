@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-// Keep the document root pointed at public/; customer records live outside it.
+// Customer records must be stored outside the web server document root.
 ini_set('session.use_strict_mode', '1');
 ini_set('session.cookie_httponly', '1');
 ini_set('session.cookie_samesite', 'Lax');
@@ -25,7 +25,12 @@ function csrf(): string { if (empty($_SESSION['csrf'])) $_SESSION['csrf']=bin2he
 function field(): string { return '<input type="hidden" name="csrf" value="'.e(csrf()).'">'; }
 function flash($message): void { $_SESSION['flash']=$message; }
 function db($callback) {
- $path=dirname(__DIR__).'/storage'; if (!is_dir($path)) mkdir($path,0700,true);
+ // Refuse to create a fresh store while data from the old public/ layout remains in the web root.
+ if (is_file(__DIR__.'/storage/data.json')) throw new RuntimeException('Move the legacy data file outside the document root before continuing; see README.');
+ $path=getenv('REBA_STORAGE_DIR') ?: dirname(__DIR__).'/reba-book-society-data';
+ if (!is_dir($path) && !mkdir($path,0700,true) && !is_dir($path)) throw new RuntimeException('Storage unavailable');
+ $path=realpath($path); $root=realpath($_SERVER['DOCUMENT_ROOT'] ?? __DIR__);
+ if (!$path || !$root || $path === $root || str_starts_with($path, rtrim($root, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR)) throw new RuntimeException('Storage must be outside the document root.');
  $fp=fopen($path.'/data.json','c+'); if (!$fp) throw new RuntimeException('Storage unavailable');
  chmod($path.'/data.json',0600); flock($fp, LOCK_EX); $raw=stream_get_contents($fp); $data=$raw ? json_decode($raw,true) : null;
  if (!is_array($data)) $data=['users'=>[], 'orders'=>[], 'attempts'=>[]];

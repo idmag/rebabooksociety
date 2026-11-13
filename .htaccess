@@ -1,0 +1,5 @@
+# Do not expose repository or server configuration files on Apache.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+Options -Indexes
