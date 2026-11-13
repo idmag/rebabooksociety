@@ -75,9 +75,77 @@ class AccountFlow(unittest.TestCase):
         with c.open(self.base + path, urlencode(values).encode()) as response:
             return response.read().decode(), response.geturl()
 
+    def test_admin_inventory(self):
+        admin, first, second = client(), client(), client()
+        page, _ = self.get(admin, "/register")
+        page, _ = self.post(admin, "/register", {"csrf": csrf(page), "action": "register", "name": "Admin Reader", "email": "ahmadmdujan@gmail.com", "password": "unverified-pass-123", "is_admin": "1"})
+        self.assertIn("activate administrator access", page)
+        with self.assertRaises(HTTPError) as denied:
+            self.get(admin, "/admin")
+        self.assertEqual(denied.exception.code, 403)
+        with self.assertRaises(HTTPError) as denied:
+            self.post(admin, "/admin", {"csrf": csrf(page), "action": "admin_update", "id": "history", "price": "1", "stock": "1"})
+        self.assertEqual(denied.exception.code, 403)
+
+        # Simulate receiving and using the one-time link at the designated mailbox.
+        data_file = self.storage / "data.json"
+        data = json.loads(data_file.read_text())
+        uid = next(u["id"] for u in data["users"] if u["email"] == "ahmadmdujan@gmail.com")
+        raw = "b" * 64
+        data["password_resets"] = {hashlib.sha256(raw.encode()).hexdigest(): {"user_id": uid, "expires": int(time.time()) + 1800}}
+        data_file.write_text(json.dumps(data))
+        page, _ = self.get(admin, "/reset-password?token=" + raw)
+        page, _ = self.post(admin, "/reset-password", {"csrf": csrf(page), "action": "reset_password", "token": raw, "new_password": "verified-pass-123", "confirm_password": "verified-pass-123"})
+        page, _ = self.post(admin, "/login", {"csrf": csrf(page), "action": "login", "email": "ahmadmdujan@gmail.com", "password": "verified-pass-123"})
+        self.assertIn("Manage inventory", page)
+        inventory, _ = self.get(admin, "/admin")
+        self.assertIn("A History of English Literature", inventory)
+        self.assertIn("Untracked", inventory)
+        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_update", "id": "history", "price": "450", "stock": "1"})
+        self.assertIn("Inventory updated", inventory)
+        self.assertEqual(json.loads(data_file.read_text())["products"]["history"]["stock"], 1)
+        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_update", "id": "history", "price": "450", "stock": "-1"})
+        self.assertIn("non-negative", inventory)
+        self.assertEqual(json.loads(data_file.read_text())["products"]["history"]["stock"], 1)
+
+        for number, c in enumerate((first, second)):
+            page, _ = self.get(c, "/register")
+            page, _ = self.post(c, "/register", {"csrf": csrf(page), "action": "register", "name": "Customer Reader", "email": f"shopper{number}@example.test", "password": "customer-pass-123"})
+            with self.assertRaises(HTTPError) as denied:
+                self.get(c, "/admin")
+            self.assertEqual(denied.exception.code, 403)
+            shop, _ = self.get(c, "/shop")
+            with self.assertRaises(HTTPError) as denied:
+                self.post(c, "/admin", {"csrf": csrf(shop), "action": "admin_visibility", "id": "history", "visible": "0"})
+            self.assertEqual(denied.exception.code, 403)
+            self.assertTrue(json.loads(data_file.read_text())["products"]["history"]["active"])
+            self.post(c, "/shop", {"csrf": csrf(shop), "action": "add", "id": "history", "return": "shop"})
+        checkout, _ = self.get(first, "/checkout")
+        page, _ = self.post(first, "/checkout", {"csrf": csrf(checkout), "action": "checkout", "phone": "9876543210", "address": "89 College Street Kolkata 700009"})
+        self.assertIn("order request has been received", page)
+        checkout, _ = self.get(second, "/checkout")
+        page, _ = self.post(second, "/checkout", {"csrf": csrf(checkout), "action": "checkout", "phone": "9876543210", "address": "89 College Street Kolkata 700009"})
+        self.assertIn("no longer available", page)
+        stored = json.loads(data_file.read_text())
+        self.assertEqual(stored["products"]["history"]["stock"], 0)
+        self.assertEqual(stored["orders"][-1]["items"][0]["price"], 450)
+        product, _ = self.get(second, "/book/history")
+        self.assertIn("Out of stock", product)
+        inventory, _ = self.get(admin, "/admin")
+        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_visibility", "id": "history", "visible": "0"})
+        self.assertIn("Book removed from the shop", inventory)
+        with self.assertRaises(HTTPError) as missing:
+            self.get(first, "/book/history")
+        self.assertEqual(missing.exception.code, 404)
+        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_visibility", "id": "history", "visible": "1"})
+        self.assertIn("Book restored to the shop", inventory)
+        self.assertIn("A History of English Literature", self.get(first, "/book/history")[0])
+        self.assertIn("A History of English Literature", self.get(first, "/account")[0])
+
     def test_default_recovery_origin_is_pinned(self):
         env = os.environ.copy()
         env.pop("REBA_BASE_URL", None)
+        env["REBA_STORAGE_DIR"] = str(self.storage)
         php = env.get("PHP_BIN", "php")
 
         def config(host):

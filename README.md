@@ -52,9 +52,17 @@ It must be the actual HTTPS site URL, without a trailing slash, query string, or
 
 The isolated account integration test can be run with `python3 tests/account_flow.py` (set `PHP_BIN` if PHP is not on your PATH). It uses a temporary private data file and disables actual mail delivery; it does not verify your server’s email transport.
 
+### Administrator and inventory
+
+The administrator is `ahmadmdujan@gmail.com`. Registration alone does **not** grant privileges: registration currently does not verify email addresses, so assigning admin rights by email alone would allow impersonation. After deployment, the mailbox owner should register or use their existing account, use **Forgot your password?** with that address, follow the email link, set a new password, and sign in. Successfully completing that email-based reset verifies control of the mailbox and activates admin access. It also invalidates any previously active sessions. Email recovery must be operational as described above; no admin password is embedded in the site.
+
+Once activated, **Manage inventory** appears on the account page and opens `/admin`. Only the verified admin can access it or make changes. The admin can update whole-rupee prices and available quantities, remove a book from the public shop, and restore it later. Existing quantities start as **untracked** (blank), not zero; set actual counts before relying on stock controls. Tracked quantities are reduced atomically when an order request is submitted, even though payment is not taken. There is no automatic cancellation or restock workflow; the operator must restore the quantity manually if an order request is cancelled. Hidden products remain in existing order histories. This dashboard does not yet add new titles or upload covers; add those through the catalogue code.
+
+The catalogue is persisted in the same private data file as accounts and orders. Starter catalogue entries are added when missing, but editing starter metadata or prices in `index.php` after the first run does not overwrite saved inventory. Change existing prices in the admin dashboard and back up the private data file. Do not replace it during deployment.
+
 ## Before going live
 
-The catalogue prices are illustrative starter prices and should be verified in `index.php`. Checkout records an order request, not a paid or fulfilled order. No payment gateway, shipping calculation, notification, inventory management or admin dashboard is configured. An operator must securely review the server-side order records and arrange confirmation, delivery and payment separately. Add contact details and a precise shop address after confirming them. For a production deployment, use HTTPS, a proper transactional database and backups, operational monitoring, a privacy policy, and a secure administrative order workflow. The included basic login throttling is not a substitute for infrastructure-level rate limiting.
+The catalogue prices are illustrative starter prices and should be verified in the admin dashboard. Checkout records an order request, not a paid or fulfilled order. No payment gateway, shipping calculation, notification, inventory management or admin dashboard is configured. An operator must securely review the server-side order records and arrange confirmation, delivery and payment separately. Add contact details and a precise shop address after confirming them. For a production deployment, use HTTPS, a proper transactional database and backups, operational monitoring, a privacy policy, and a secure administrative order workflow. The included basic login throttling is not a substitute for infrastructure-level rate limiting.
 
 ### Deploying visual updates
 
