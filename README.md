@@ -37,3 +37,7 @@ Use HTTPS in production. PHP sessions must be configured to use a private server
 ## Before going live
 
 The catalogue prices are illustrative starter prices and should be verified in `index.php`. Checkout records an order request, not a paid or fulfilled order. No payment gateway, shipping calculation, notification, inventory management or admin dashboard is configured. An operator must securely review the server-side order records and arrange confirmation, delivery and payment separately. Add contact details and a precise shop address after confirming them. For a production deployment, use HTTPS, a proper transactional database and backups, operational monitoring, a privacy policy, and a secure administrative order workflow. The included basic login throttling is not a substitute for infrastructure-level rate limiting.
+
+### Deploying visual updates
+
+Deploy `index.php` and the entire `assets/` directory together, including `storefront.css`, `college-street.jpg`, and the logo files. The stylesheet URL includes a content-based version to prevent browsers from reusing an older design with newer page markup. If a CDN or reverse proxy caches HTML, purge that cache after deploying; make sure the server actually serves the current files.
