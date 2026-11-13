@@ -75,6 +75,15 @@ class AccountFlow(unittest.TestCase):
         with c.open(self.base + path, urlencode(values).encode()) as response:
             return response.read().decode(), response.geturl()
 
+    def test_navigation(self):
+        for path, label in (("/home", "Home"), ("/shop", "The Bookshop"), ("/book/history", "The Bookshop"), ("/about", "Our Story"), ("/contact", "Contact")):
+            page, _ = self.get(client(), path)
+            nav = page.split('<nav class="main-nav"', 1)[1].split('</nav>', 1)[0]
+            self.assertRegex(nav, r'<a class="active" aria-current="page" href="[^"]+">' + re.escape(label) + r'</a>')
+            self.assertEqual(nav.count('aria-current="page"'), 1)
+            self.assertIn('The Bookshop', nav)
+            self.assertIn('Our Story', nav)
+
     def test_contact_details(self):
         page, _ = self.get(client(), "/contact")
         for text in ("Mobile / WhatsApp No.", "+91 6289459775", "tel:+916289459775", "https://wa.me/916289459775", "Stall No. 89, College Street", "(Near Calcutta University)", "Kolkata - 700009"):
