@@ -71,6 +71,9 @@ function validNewPassword($password): bool {
 }
 function resetConfig(): ?array {
  $base = rtrim(trim((string)getenv('REBA_BASE_URL')), '/');
+ // Use the known live URL only on its exact host. Never construct a reset link from request headers.
+ $host = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
+ if ($base === '' && in_array($host, ['rebabooksociety.websolve.co.in', 'rebabooksociety.websolve.co.in:443'], true)) $base = 'https://rebabooksociety.websolve.co.in';
  $from = REBA_RESET_FROM_EMAIL;
  $parts = parse_url($base);
  if (!filter_var($base, FILTER_VALIDATE_URL) || !is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || !filter_var($from, FILTER_VALIDATE_EMAIL) || str_contains($from, "\n") || str_contains($from, "\r") || !function_exists('mail')) return null;

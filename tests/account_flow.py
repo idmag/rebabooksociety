@@ -75,6 +75,28 @@ class AccountFlow(unittest.TestCase):
         with c.open(self.base + path, urlencode(values).encode()) as response:
             return response.read().decode(), response.geturl()
 
+    def test_default_recovery_origin_is_pinned(self):
+        env = os.environ.copy()
+        env.pop("REBA_BASE_URL", None)
+        php = env.get("PHP_BIN", "php")
+
+        def config(host):
+            code = (
+                '$_SERVER["SCRIPT_NAME"]="/index.php"; '
+                '$_SERVER["REQUEST_URI"]="/contact"; '
+                '$_SERVER["REQUEST_METHOD"]="GET"; '
+                '$_SERVER["HTTP_HOST"]=' + json.dumps(host) + '; '
+                'ob_start(); require "index.php"; ob_end_clean(); echo json_encode(resetConfig());'
+            )
+            result = subprocess.run([php, "-r", code], cwd=ROOT, env=env, capture_output=True, text=True, check=True)
+            return json.loads(result.stdout)
+
+        expected = {"base": "https://rebabooksociety.websolve.co.in", "from": "info@rebabooksociety.websolve.co.in"}
+        self.assertEqual(config("rebabooksociety.websolve.co.in"), expected)
+        self.assertEqual(config("rebabooksociety.websolve.co.in:443"), expected)
+        self.assertIsNone(config("rebabooksociety.websolve.co.in.attacker.example"))
+        self.assertIsNone(config("preview.example"))
+
     def test_account_and_recovery(self):
         first, second = client(), client()
         page, _ = self.get(first, "/register")
