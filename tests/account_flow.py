@@ -75,6 +75,14 @@ class AccountFlow(unittest.TestCase):
         with c.open(self.base + path, urlencode(values).encode()) as response:
             return response.read().decode(), response.geturl()
 
+    def test_contact_details(self):
+        page, _ = self.get(client(), "/contact")
+        for text in ("Mobile / WhatsApp No.", "+91 6289459775", "tel:+916289459775", "https://wa.me/916289459775", "Stall No. 89, College Street", "(Near Calcutta University)", "Kolkata - 700009"):
+            self.assertIn(text, page)
+        self.assertNotIn("will be added here once confirmed", page)
+        about, _ = self.get(client(), "/about")
+        self.assertIn("Stall No. 89, College Street", about)
+
     def test_admin_inventory(self):
         admin, first, second = client(), client(), client()
         page, _ = self.get(admin, "/register")

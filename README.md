@@ -26,7 +26,7 @@ location ^~ /tests/ { deny all; }
 location = /router.php { deny all; }
 ```
 
-If the site is installed in a subdirectory, adjust the Nginx front-controller path to include that subdirectory. Do not serve repository metadata, `router.php`, `tests/`, or the legacy `storage/` directory in production. The contact page intentionally does not invent a phone number, email or exact address; add verified contact details before launch.
+If the site is installed in a subdirectory, adjust the Nginx front-controller path to include that subdirectory. Do not serve repository metadata, `router.php`, `tests/`, or the legacy `storage/` directory in production. The contact page lists the supplied mobile / WhatsApp number and shop address.
 
 ### Private customer storage
 
