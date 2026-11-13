@@ -40,14 +40,13 @@ Use HTTPS in production. PHP sessions must be configured to use a private server
 
 Signed-in customers can update their display name and their saved delivery and billing addresses under `/account`. Their saved delivery address is offered at checkout; changing it does not alter past orders. Password changes require the current password and invalidate other active sessions. Existing account records work without migration.
 
-Recovery is **disabled until email is configured**. To enable it, configure the hosting server to deliver PHP `mail()` through a working mail transport, then set these PHP environment variables (in the hosting panel, Apache configuration, or PHP-FPM environment as appropriate):
+Recovery is **disabled until email is configured**. To enable it, configure the hosting server to deliver PHP `mail()` through a working mail transport, then set this PHP environment variable (in the hosting panel, Apache configuration, or PHP-FPM environment as appropriate):
 
 ```text
-REBA_BASE_URL=https://your-domain.example
-REBA_RESET_FROM_EMAIL=verified-sender@your-domain.example
+REBA_BASE_URL=https://rebabooksociety.websolve.co.in
 ```
 
-`REBA_BASE_URL` must be the actual HTTPS site URL, including any installation subdirectory, without a trailing slash, query string, or fragment. Use a sender address authorised by your mail service; configure domain authentication and monitor mail delivery. Send a real test email and complete a reset before launch. If email delivery is not configured, the recovery page says so and does not claim to send a link. Configure the live site and PHP session cookies for HTTPS only. Set proxy/edge and web-server access logs to omit query strings on `/reset-password`, since the initial recovery link contains a secret token; do not log reset email bodies or tokens. Tokens are stored only as hashes, expire after 30 minutes, can be used once, and are invalidated by a password change. Recovery requests are rate-limited and use the same response whether or not an account exists. These application limits are not a substitute for server-level rate limiting.
+`REBA_BASE_URL` must be the actual HTTPS site URL, including any installation subdirectory, without a trailing slash, query string, or fragment. Recovery messages use `info@rebabooksociety.websolve.co.in` in the From header. Your mail service must allow that sender; configure domain authentication (SPF, DKIM and DMARC as appropriate) and monitor mail delivery. Send a real test email and complete a reset before launch. If email delivery is not configured, the recovery page says so and does not claim to send a link. Configure the live site and PHP session cookies for HTTPS only. Set proxy/edge and web-server access logs to omit query strings on `/reset-password`, since the initial recovery link contains a secret token; do not log reset email bodies or tokens. Tokens are stored only as hashes, expire after 30 minutes, can be used once, and are invalidated by a password change. Recovery requests are rate-limited and use the same response whether or not an account exists. These application limits are not a substitute for server-level rate limiting.
 
 The isolated account integration test can be run with `python3 tests/account_flow.py` (set `PHP_BIN` if PHP is not on your PATH). It uses a temporary private data file and disables actual mail delivery; it does not verify your server’s email transport.
 

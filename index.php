@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+const REBA_RESET_FROM_EMAIL = 'info@rebabooksociety.websolve.co.in';
 // Customer records must be stored outside the web server document root.
 ini_set('session.use_strict_mode', '1');
 ini_set('session.cookie_httponly', '1');
@@ -70,7 +71,7 @@ function validNewPassword($password): bool {
 }
 function resetConfig(): ?array {
  $base = rtrim(trim((string)getenv('REBA_BASE_URL')), '/');
- $from = trim((string)getenv('REBA_RESET_FROM_EMAIL'));
+ $from = REBA_RESET_FROM_EMAIL;
  $parts = parse_url($base);
  if (!filter_var($base, FILTER_VALIDATE_URL) || !is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || !filter_var($from, FILTER_VALIDATE_EMAIL) || str_contains($from, "\n") || str_contains($from, "\r") || !function_exists('mail')) return null;
  return ['base'=>$base, 'from'=>$from];

@@ -42,8 +42,7 @@ class AccountFlow(unittest.TestCase):
             port = sock.getsockname()[1]
         cls.base = f"http://127.0.0.1:{port}"
         env = os.environ.copy()
-        env.update(REBA_STORAGE_DIR=str(cls.storage), REBA_BASE_URL="https://example.test",
-                   REBA_RESET_FROM_EMAIL="books@example.test")
+        env.update(REBA_STORAGE_DIR=str(cls.storage), REBA_BASE_URL="https://example.test")
         cls.log = open(Path(cls.tmp.name) / "server.log", "w+")
         cls.server = subprocess.Popen(
             [env.get("PHP_BIN", "php"), "-d", "sendmail_path=/bin/false", "-S", f"127.0.0.1:{port}", "-t", ".", "router.php"],
