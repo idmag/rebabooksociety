@@ -1,0 +1,149 @@
+"""Run with `python3 tests/account_flow.py`; set PHP_BIN if PHP is not on PATH.
+
+Exercises account settings and recovery against an isolated PHP server and a
+private temporary data file. No real reset email is sent.
+"""
+import hashlib
+import http.cookiejar
+import json
+import os
+from pathlib import Path
+import re
+import socket
+import subprocess
+import tempfile
+import time
+import unittest
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import HTTPCookieProcessor, build_opener, urlopen
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def csrf(html):
+    match = re.search(r'name="csrf" value="([^"]+)', html)
+    if not match:
+        raise AssertionError("CSRF token not found")
+    return match.group(1)
+
+
+def client():
+    return build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
+
+
+class AccountFlow(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(prefix="reba-account-test-")
+        cls.storage = Path(cls.tmp.name) / "private-data"
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        cls.base = f"http://127.0.0.1:{port}"
+        env = os.environ.copy()
+        env.update(REBA_STORAGE_DIR=str(cls.storage), REBA_BASE_URL="https://example.test",
+                   REBA_RESET_FROM_EMAIL="books@example.test")
+        cls.log = open(Path(cls.tmp.name) / "server.log", "w+")
+        cls.server = subprocess.Popen(
+            [env.get("PHP_BIN", "php"), "-d", "sendmail_path=/bin/false", "-S", f"127.0.0.1:{port}", "-t", ".", "router.php"],
+            cwd=ROOT, env=env, stdout=cls.log, stderr=cls.log,
+        )
+        deadline = time.monotonic() + 20
+        while True:
+            try:
+                with urlopen(cls.base + "/home", timeout=1) as response:
+                    if response.status == 200:
+                        break
+            except (OSError, URLError):
+                if cls.server.poll() is not None or time.monotonic() >= deadline:
+                    cls.tearDownClass()
+                    raise RuntimeError("PHP server did not start")
+                time.sleep(0.05)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.terminate()
+        cls.server.wait(timeout=10)
+        cls.log.close()
+        cls.tmp.cleanup()
+
+    def get(self, c, path):
+        with c.open(self.base + path) as response:
+            return response.read().decode(), response.geturl()
+
+    def post(self, c, path, values):
+        with c.open(self.base + path, urlencode(values).encode()) as response:
+            return response.read().decode(), response.geturl()
+
+    def test_account_and_recovery(self):
+        first, second = client(), client()
+        page, _ = self.get(first, "/register")
+        page, url = self.post(first, "/register", {
+            "csrf": csrf(page), "action": "register", "name": "First Reader",
+            "email": "account-test@example.test", "password": "original-pass-123",
+        })
+        self.assertTrue(url.endswith("/account"))
+        self.assertIn("Account settings", page)
+        page, _ = self.post(first, "/account", {
+            "csrf": csrf(page), "action": "save_profile", "name": "Updated Reader",
+            "shipping_address": "89 College Street Kolkata 700009", "billing_address": "Billing address Kolkata 700009",
+        })
+        self.assertIn("Updated", page)
+        self.assertIn("Billing address Kolkata 700009", page)
+        checkout, _ = self.get(first, "/checkout")
+        self.assertIn("89 College Street Kolkata 700009", checkout)
+
+        login, _ = self.get(second, "/login")
+        page2, url = self.post(second, "/login", {"csrf": csrf(login), "action": "login", "email": "account-test@example.test", "password": "original-pass-123"})
+        self.assertTrue(url.endswith("/account"))
+        page, _ = self.post(first, "/account", {"csrf": csrf(page), "action": "change_password", "current_password": "wrong-password", "new_password": "changed-pass-123", "confirm_password": "changed-pass-123"})
+        self.assertIn("Current password is incorrect", page)
+        page, _ = self.post(first, "/account", {"csrf": csrf(page), "action": "change_password", "current_password": "original-pass-123", "new_password": "changed-pass-123", "confirm_password": "changed-pass-123"})
+        self.assertIn("Your password has been updated", page)
+        _, url = self.get(second, "/account")
+        self.assertTrue(url.endswith("/login"))
+        login, _ = self.get(second, "/login")
+        _, url = self.post(second, "/login", {"csrf": csrf(login), "action": "login", "email": "account-test@example.test", "password": "changed-pass-123"})
+        self.assertTrue(url.endswith("/account"))
+        with self.assertRaises(HTTPError) as denied:
+            self.post(first, "/account", {"csrf": "wrong", "action": "save_profile", "name": "Changed"})
+        self.assertEqual(denied.exception.code, 403)
+
+        page, _ = self.get(first, "/forgot-password")
+        page, _ = self.post(first, "/forgot-password", {"csrf": csrf(page), "action": "forgot_password", "email": "account-test@example.test"})
+        self.assertIn("If an account exists", page)
+        data_file = self.storage / "data.json"
+        data = json.loads(data_file.read_text())
+        self.assertEqual(len(data["password_resets"]), 1)
+        self.assertNotIn("changed-pass-123", data_file.read_text())
+
+        # Mail delivery is disabled in this test. Insert a known token hash to
+        # exercise expiry, reset, and one-time use without a real mail service.
+        raw = "a" * 64
+        digest = hashlib.sha256(raw.encode()).hexdigest()
+        uid = data["users"][0]["id"]
+        data["password_resets"] = {digest: {"user_id": uid, "expires": int(time.time()) - 1}}
+        data_file.write_text(json.dumps(data))
+        page, _ = self.get(first, "/reset-password?token=" + raw)
+        page, _ = self.post(first, "/reset-password", {"csrf": csrf(page), "action": "reset_password", "token": raw, "new_password": "recovered-pass-123", "confirm_password": "recovered-pass-123"})
+        self.assertIn("invalid or has expired", page)
+        data = json.loads(data_file.read_text())
+        data["password_resets"] = {digest: {"user_id": uid, "expires": int(time.time()) + 1800}}
+        data_file.write_text(json.dumps(data))
+        page, _ = self.get(first, "/reset-password?token=" + raw)
+        page, url = self.post(first, "/reset-password", {"csrf": csrf(page), "action": "reset_password", "token": raw, "new_password": "recovered-pass-123", "confirm_password": "recovered-pass-123"})
+        self.assertTrue(url.endswith("/login"))
+        self.assertIn("Your password has been reset", page)
+        _, url = self.get(second, "/account")
+        self.assertTrue(url.endswith("/login"))
+        page, _ = self.get(first, "/reset-password?token=" + raw)
+        page, _ = self.post(first, "/reset-password", {"csrf": csrf(page), "action": "reset_password", "token": raw, "new_password": "another-pass-123", "confirm_password": "another-pass-123"})
+        self.assertIn("invalid or has expired", page)
+        page, _ = self.get(second, "/login")
+        _, url = self.post(second, "/login", {"csrf": csrf(page), "action": "login", "email": "account-test@example.test", "password": "recovered-pass-123"})
+        self.assertTrue(url.endswith("/account"))
+
+
+if __name__ == "__main__":
+    unittest.main()
