@@ -90,6 +90,9 @@ class AccountFlow(unittest.TestCase):
         # Simulate receiving and using the one-time link at the designated mailbox.
         data_file = self.storage / "data.json"
         data = json.loads(data_file.read_text())
+        # Simulate a catalogue saved by the previous version, with an edited price.
+        data["products"]["history"]["price"] = 537
+        data["products"]["history"].pop("mrp")
         uid = next(u["id"] for u in data["users"] if u["email"] == "ahmadmdujan@gmail.com")
         raw = "b" * 64
         data["password_resets"] = {hashlib.sha256(raw.encode()).hexdigest(): {"user_id": uid, "expires": int(time.time()) + 1800}}
@@ -101,10 +104,34 @@ class AccountFlow(unittest.TestCase):
         inventory, _ = self.get(admin, "/admin")
         self.assertIn("A History of English Literature", inventory)
         self.assertIn("Untracked", inventory)
-        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_update", "id": "history", "price": "450", "stock": "1"})
+        self.assertIn("MRP (₹)", inventory)
+        self.assertIn("Selling price (₹)", inventory)
+        # Migrated catalogue data starts with MRP equal to its saved selling price.
+        before = json.loads(data_file.read_text())["products"]["history"]
+        self.assertEqual((before["mrp"], before["price"]), (537, 537))
+        self.assertNotIn("% off", self.get(admin, "/book/history")[0])
+        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_update", "id": "history", "price": "450", "mrp": "600", "stock": "1"})
         self.assertIn("Inventory updated", inventory)
+        book, _ = self.get(admin, "/book/history")
+        self.assertIn("₹450", book)
+        self.assertIn("₹600", book)
+        self.assertIn("25% off", book)
+        self.assertIn("25% off", self.get(admin, "/shop")[0])
+        self.assertIn("MRP <s>₹600</s>", book)
+        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_update", "id": "history", "price": "500", "mrp": "600", "stock": "1"})
+        self.assertIn("16.7% off", self.get(admin, "/book/history")[0])
+        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_update", "id": "history", "price": "450", "mrp": "600", "stock": "1"})
+        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_update", "id": "history", "price": "601", "mrp": "600", "stock": "1"})
+        self.assertIn("selling price no higher than MRP", inventory)
+        stored = json.loads(data_file.read_text())["products"]["history"]
+        self.assertEqual((stored["price"], stored["mrp"]), (450, 600))
+        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_update", "id": "justice", "price": "0", "mrp": "100", "stock": ""})
+        self.assertIn("100% off", self.get(admin, "/book/justice")[0])
+        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_update", "id": "justice", "price": "0", "mrp": "0", "stock": ""})
+        self.assertIn("Inventory updated", inventory)
+        self.assertNotIn("% off", self.get(admin, "/book/justice")[0])
         self.assertEqual(json.loads(data_file.read_text())["products"]["history"]["stock"], 1)
-        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_update", "id": "history", "price": "450", "stock": "-1"})
+        inventory, _ = self.post(admin, "/admin", {"csrf": csrf(inventory), "action": "admin_update", "id": "history", "price": "450", "mrp": "600", "stock": "-1"})
         self.assertIn("non-negative", inventory)
         self.assertEqual(json.loads(data_file.read_text())["products"]["history"]["stock"], 1)
 
@@ -145,15 +172,17 @@ class AccountFlow(unittest.TestCase):
     def test_six_character_password_minimum(self):
         c = client()
         page, _ = self.get(c, "/register")
+        self.assertIn("Minimum 6 Characters", page)
+        self.assertNotIn("72 bytes", page)
         for too_short in ("12345", "ééééé"):
             page, _ = self.post(c, "/register", {"csrf": csrf(page), "action": "register", "name": "Short Reader", "email": "short-password@example.test", "password": too_short})
-            self.assertIn("at least 6 characters", page)
+            self.assertIn("Minimum 6 Characters", page)
         page, _ = self.post(c, "/register", {"csrf": csrf(page), "action": "register", "name": "Short Reader", "email": "short-password@example.test", "password": "x" * 73})
-        self.assertIn("at most 72 bytes", page)
+        self.assertIn("Please use a shorter password", page)
         page, url = self.post(c, "/register", {"csrf": csrf(page), "action": "register", "name": "Short Reader", "email": "short-password@example.test", "password": "ab1234"})
         self.assertTrue(url.endswith("/account"))
         page, _ = self.post(c, "/account", {"csrf": csrf(page), "action": "change_password", "current_password": "ab1234", "new_password": "12345", "confirm_password": "12345"})
-        self.assertIn("at least 6 characters", page)
+        self.assertIn("Minimum 6 Characters", page)
         page, _ = self.post(c, "/account", {"csrf": csrf(page), "action": "change_password", "current_password": "ab1234", "new_password": "éabcd1", "confirm_password": "éabcd1"})
         self.assertIn("Your password has been updated", page)
         page, _ = self.post(c, "/account", {"csrf": csrf(page), "action": "logout"})
