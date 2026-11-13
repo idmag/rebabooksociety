@@ -142,6 +142,36 @@ class AccountFlow(unittest.TestCase):
         self.assertIn("A History of English Literature", self.get(first, "/book/history")[0])
         self.assertIn("A History of English Literature", self.get(first, "/account")[0])
 
+    def test_six_character_password_minimum(self):
+        c = client()
+        page, _ = self.get(c, "/register")
+        for too_short in ("12345", "ééééé"):
+            page, _ = self.post(c, "/register", {"csrf": csrf(page), "action": "register", "name": "Short Reader", "email": "short-password@example.test", "password": too_short})
+            self.assertIn("at least 6 characters", page)
+        page, _ = self.post(c, "/register", {"csrf": csrf(page), "action": "register", "name": "Short Reader", "email": "short-password@example.test", "password": "x" * 73})
+        self.assertIn("at most 72 bytes", page)
+        page, url = self.post(c, "/register", {"csrf": csrf(page), "action": "register", "name": "Short Reader", "email": "short-password@example.test", "password": "ab1234"})
+        self.assertTrue(url.endswith("/account"))
+        page, _ = self.post(c, "/account", {"csrf": csrf(page), "action": "change_password", "current_password": "ab1234", "new_password": "12345", "confirm_password": "12345"})
+        self.assertIn("at least 6 characters", page)
+        page, _ = self.post(c, "/account", {"csrf": csrf(page), "action": "change_password", "current_password": "ab1234", "new_password": "éabcd1", "confirm_password": "éabcd1"})
+        self.assertIn("Your password has been updated", page)
+        page, _ = self.post(c, "/account", {"csrf": csrf(page), "action": "logout"})
+        page, _ = self.get(c, "/login")
+        page, url = self.post(c, "/login", {"csrf": csrf(page), "action": "login", "email": "short-password@example.test", "password": "éabcd1"})
+        self.assertTrue(url.endswith("/account"))
+        data_file = self.storage / "data.json"
+        data = json.loads(data_file.read_text())
+        uid = next(u["id"] for u in data["users"] if u["email"] == "short-password@example.test")
+        raw = "c" * 64
+        data["password_resets"] = {hashlib.sha256(raw.encode()).hexdigest(): {"user_id": uid, "expires": int(time.time()) + 1800}}
+        data_file.write_text(json.dumps(data))
+        page, _ = self.get(c, "/reset-password?token=" + raw)
+        page, _ = self.post(c, "/reset-password", {"csrf": csrf(page), "action": "reset_password", "token": raw, "new_password": "123456", "confirm_password": "123456"})
+        self.assertIn("Your password has been reset", page)
+        page, url = self.post(c, "/login", {"csrf": csrf(page), "action": "login", "email": "short-password@example.test", "password": "123456"})
+        self.assertTrue(url.endswith("/account"))
+
     def test_default_recovery_origin_is_pinned(self):
         env = os.environ.copy()
         env.pop("REBA_BASE_URL", None)

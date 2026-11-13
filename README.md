@@ -38,7 +38,7 @@ Use HTTPS in production. PHP sessions must be configured to use a private server
 
 ### Account settings and password recovery
 
-Signed-in customers can update their display name and their saved delivery and billing addresses under `/account`. Their saved delivery address is offered at checkout; changing it does not alter past orders. Password changes require the current password and invalidate other active sessions. Existing account records work without migration.
+Signed-in customers can update their display name and their saved delivery and billing addresses under `/account`. Their saved delivery address is offered at checkout; changing it does not alter past orders. Password changes require the current password and invalidate other active sessions. Passwords must be at least six Unicode characters and no more than 72 bytes; longer, unique passwords are recommended. Existing account records work without migration.
 
 Recovery emails use PHP `mail()` and the From address `info@rebabooksociety.websolve.co.in`. On the exact live host `rebabooksociety.websolve.co.in`, reset links default to `https://rebabooksociety.websolve.co.in`. The host must be configured to deliver PHP mail and authorise that sender; set up domain authentication (SPF, DKIM and DMARC as appropriate) and monitor delivery. **Send a real test email and complete a reset on the deployed site before relying on recovery.**
 
