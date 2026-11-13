@@ -1,5 +1,14 @@
-# Do not expose repository or server configuration files on Apache.
+# Block hidden files and directories (including Git metadata) and directory listings.
+Options -Indexes
 <FilesMatch "^\.">
     Require all denied
 </FilesMatch>
-Options -Indexes
+
+# Clean page URLs, while leaving existing assets to the web server.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule (^|/)\. - [F,L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L,QSA]
+</IfModule>

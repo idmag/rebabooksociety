@@ -7,10 +7,24 @@ A PHP storefront for Reba Book Society, featuring the supplied cover artwork, a 
 Requires PHP 8.1 or newer. The entry point and assets are at the repository root; configure the web server to serve this directory, or run from the repository root:
 
 ```sh
-php -S 0.0.0.0:8000 -t .
+php -S 0.0.0.0:8000 -t . router.php
 ```
 
-Visit http://localhost:8000. Use a web server configured to execute PHP; opening `index.php` directly in a browser will not work.
+Visit http://localhost:8000/home. The development router serves the clean URLs and only exposes storefront assets. Use a web server configured to execute PHP; opening `index.php` directly in a browser will not work.
+
+### Clean URLs in production
+
+Apache needs `mod_rewrite` enabled and `AllowOverride All` (or the equivalent rewrite and access rules in the virtual host) so the included `.htaccess` can route paths such as `/home`, `/about`, `/contact`, `/book/perseus`, `/cart`, and `/account` to `index.php`. Existing `?page=...` bookmarks redirect to the clean paths. Search and category filters continue to use query parameters.
+
+For Nginx, configure the normal PHP-FPM handler and route non-file requests to the front controller, for example:
+
+```nginx
+location / { try_files $uri $uri/ /index.php?$query_string; }
+location ~ /\. { deny all; }
+location ^~ /storage/ { deny all; }
+```
+
+If the site is installed in a subdirectory, adjust the Nginx front-controller path to include that subdirectory. Do not serve repository metadata, `router.php`, or the legacy `storage/` directory in production. The contact page intentionally does not invent a phone number, email or exact address; add verified contact details before launch.
 
 ### Private customer storage
 
