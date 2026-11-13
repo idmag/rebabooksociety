@@ -39,3 +39,5 @@
 
 /* Space the featured books without an extra catalogue label. */
 .section-heading + .book-grid{margin-top:32px}
+.book-isbn{margin:7px 0;color:#786d62;font-size:10px;letter-spacing:.015em}
+.detail-isbn{font-size:12px;margin-top:10px}
