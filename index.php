@@ -17,6 +17,7 @@ $books = [
  'wasteland'=>['title'=>'The Waste Land and Other Poems','author'=>'T. S. Eliot','category'=>'Poetry','price'=>225,'image'=>'the-waste-land-and-other-poems-front.jpg','description'=>'A collection of poems from one of the defining voices of modern literature.'],
  'biographia'=>['title'=>'Biographia Literaria','author'=>'S. T. Coleridge','category'=>'Literary Studies','price'=>299,'image'=>'biographia-literaria-front.jpg','description'=>'Coleridge’s reflections on imagination, poetry and the life of a writer, in a critical study.'],
  'awakening'=>['title'=>'The Awakening','author'=>'Kate Chopin','category'=>'Fiction','price'=>199,'image'=>'the-awakening-front.jpg','description'=>'Kate Chopin’s enduring novel of self-discovery, independence and the expectations of society.'],
+ 'old-man-and-the-sea'=>['title'=>'The Old Man and the Sea','author'=>'Ernest Hemingway','category'=>'Fiction','price'=>199,'image'=>'the-old-man-and-the-sea-front.jpg','description'=>'An ageing Cuban fisherman faces a great marlin in Hemingway’s enduring story of resilience and the sea.'],
 ];
 function e($s): string { return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 // SCRIPT_NAME points at the front controller, including any installation subdirectory.
