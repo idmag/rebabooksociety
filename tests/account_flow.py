@@ -16,7 +16,7 @@ import time
 import unittest
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import HTTPCookieProcessor, build_opener, urlopen
+from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -93,23 +93,52 @@ class AccountFlow(unittest.TestCase):
         c = client()
         page, _ = self.get(c, "/")
         page, url = self.post(c, "/", {"csrf": csrf(page), "action": "add", "id": "perseus", "return": "home"})
-        self.assertTrue(url.endswith("/#cart-feedback"))
+        self.assertTrue(url.endswith("/#product-perseus"))
         self.assertIn('“Perseus the Deliverer” was added to your cart. 1 copy of this book is in your cart.', page)
-        self.assertIn('id="cart-feedback"', page)
-        self.assertLess(page.index('id="cart-feedback"'), page.index('id="featured-books"'))
-        page, url = self.post(c, "/shop", {"csrf": csrf(page), "action": "add", "id": "perseus", "return": "shop"})
-        self.assertTrue(url.endswith("/shop#cart-feedback"))
+        self.assertIn('data-cart-quantity>1 in cart</span>', page)
+        page, url = self.post(c, "/shop?category=Drama&q=Perseus", {"csrf": csrf(page), "action": "add", "id": "perseus", "return": "shop"})
+        self.assertTrue(url.endswith("/shop?category=Drama&q=Perseus#product-perseus"))
         self.assertIn('2 copies of this book are in your cart.', page)
         page, _ = self.get(c, "/book/perseus")
-        self.assertNotIn('id="cart-feedback"', page)
+        self.assertNotIn('was added to your cart', page)
         page, url = self.post(c, "/book/perseus", {"csrf": csrf(page), "action": "add", "id": "perseus", "return": "book"})
-        self.assertTrue(url.endswith("/book/perseus#cart-feedback"))
+        self.assertTrue(url.endswith("/book/perseus#product-perseus"))
         self.assertIn('3 copies of this book are in your cart.', page)
         self.assertIn('href="/cart">View cart', page)
         page, url = self.post(c, "/shop", {"csrf": csrf(page), "action": "add", "id": "missing", "return": "book"})
         self.assertTrue(url.endswith("/shop#cart-feedback"))
         self.assertIn('This book is no longer available.', page)
         self.assertNotIn('was added to your cart', page)
+
+    def test_cart_add_ajax_and_delete(self):
+        c = client()
+        page, _ = self.get(c, "/shop?category=Drama")
+        token = csrf(page)
+        def add(item):
+            fields = {"csrf": token, "action": "add", "id": item, "return": "shop"}
+            boundary = "reba-test-boundary"
+            body = b"".join((f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n').encode() for key, value in fields.items()) + f'--{boundary}--\r\n'.encode()
+            request = Request(self.base + "/shop?category=Drama", body, headers={"Accept": "application/json", "Content-Type": "multipart/form-data; boundary=" + boundary})
+            with c.open(request) as response:
+                self.assertEqual(response.headers.get_content_type(), "application/json")
+                return json.loads(response.read())
+        self.assertEqual(add("perseus")["quantity"], 1)
+        result = add("perseus")
+        self.assertEqual((result["success"], result["quantity"], result["cartCount"]), (True, 2, 2))
+        self.assertIn("2 copies", result["message"])
+        self.assertEqual(add("wasteland")["cartCount"], 3)
+        cart, _ = self.get(c, "/cart")
+        self.assertIn('name="remove_id" value="perseus"', cart)
+        self.assertIn('name="remove_id" value="wasteland"', cart)
+        # Removing one item does not apply unsaved quantity fields to another item.
+        cart, _ = self.post(c, "/cart", {"csrf": csrf(cart), "action": "update_cart", "remove_id": "perseus", "qty[wasteland]": "0"})
+        self.assertNotIn('name="remove_id" value="perseus"', cart)
+        self.assertIn('name="remove_id" value="wasteland"', cart)
+        self.assertIn('Book removed from your cart.', cart)
+        page, _ = self.get(c, "/book/perseus")
+        self.assertIn('data-cart-quantity>0 in cart</span>', page)
+        cart, _ = self.post(c, "/cart", {"csrf": csrf(cart), "action": "update_cart", "remove_id": "wasteland"})
+        self.assertIn('Your bag is waiting', cart)
 
     def test_home_featured_books(self):
         page, _ = self.get(client(), "/")
