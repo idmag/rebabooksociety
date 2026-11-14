@@ -149,6 +149,8 @@ class AccountFlow(unittest.TestCase):
         cart, _ = self.get(c, "/cart")
         self.assertIn('cart-update.js', cart)
         self.assertIn('data-cart-form', cart)
+        self.assertNotIn('Set quantity to 0 to remove a book.', cart)
+        self.assertIn('name="remove_id" value="perseus"', cart)
         data = urlencode({"csrf": csrf(cart), "action": "update_cart", "qty[perseus]": "3"}).encode()
         request = Request(self.base + "/cart", data, headers={"Accept": "application/json"})
         with c.open(request) as response:

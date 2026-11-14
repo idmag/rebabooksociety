@@ -4,6 +4,12 @@
   const status = form.querySelector('[data-cart-status]');
   const checkout = document.querySelector('[data-checkout]');
   let timer, dirty = false, saving = false;
+  const animateChange = element => {
+    if (!element) return;
+    element.classList.remove('cart-changed');
+    void element.offsetWidth;
+    element.classList.add('cart-changed');
+  };
 
   const inputs = () => Array.from(form.querySelectorAll('input[type="number"]'));
   const save = async () => {
@@ -24,20 +30,24 @@
         if (!item) { row.remove(); return; }
         row.querySelector('input[type="number"]').value = item.quantity;
         row.querySelector('[data-unit-price]').textContent = item.unitPrice;
-        row.querySelector('[data-line-total]').textContent = item.lineTotal;
+        const line = row.querySelector('[data-line-total]');
+        if (line.textContent !== item.lineTotal) { line.textContent = item.lineTotal; animateChange(line); }
         const warning = row.querySelector('[data-stock-warning]');
         warning.hidden = item.stock === null || item.quantity <= item.stock;
         warning.textContent = item.stock === 0 ? 'Out of stock' : `Available: ${item.stock}`;
       });
-      document.querySelector('[data-cart-subtotal]').textContent = result.subtotal;
+      const subtotal = document.querySelector('[data-cart-subtotal]');
+      if (subtotal.textContent !== result.subtotal) { subtotal.textContent = result.subtotal; animateChange(subtotal); }
       const badge = document.querySelector('[data-cart-badge]');
-      if (badge) { badge.textContent = result.cartCount; badge.hidden = result.cartCount <= 0; }
+      if (badge) { if (Number(badge.textContent) !== result.cartCount) animateChange(badge); badge.textContent = result.cartCount; badge.hidden = result.cartCount <= 0; }
       dirty = false;
       status.textContent = 'Your bag has been updated.';
+      animateChange(status);
       if (!result.cartCount) location.reload();
       return true;
     } catch (_) {
       status.textContent = 'Could not update your bag. Please try Update bag again.';
+      animateChange(status);
       return false;
     } finally {
       saving = false;
