@@ -242,6 +242,59 @@ class AccountFlow(unittest.TestCase):
             guest.open(request)
         self.assertEqual(denied.exception.code, 400)
 
+    def test_remove_all_cart_and_wishlist(self):
+        c, another = client(), client()
+        shop, _ = self.get(c, "/shop")
+        other_shop, _ = self.get(another, "/shop")
+        for book in ('perseus', 'wasteland'):
+            shop, _ = self.post(c, "/shop", {"csrf": csrf(shop), "action": "add", "id": book, "return": "shop"})
+            shop, _ = self.post(c, "/shop", {"csrf": csrf(shop), "action": "wishlist_toggle", "id": book, "set": "1", "return": "shop"})
+        self.post(another, "/shop", {"csrf": csrf(other_shop), "action": "wishlist_toggle", "id": "perseus", "set": "1", "return": "shop"})
+        cart, _ = self.get(c, "/cart")
+        self.assertIn('data-clear-cart', cart)
+        self.assertIn('>Remove All</button>', cart)
+        with self.assertRaises(HTTPError) as denied:
+            self.post(c, "/cart", {"csrf": "bad", "action": "clear_cart"})
+        self.assertEqual(denied.exception.code, 403)
+        self.assertIn('data-cart-row="perseus"', self.get(c, "/cart")[0])
+        cart, _ = self.post(c, "/cart", {"csrf": csrf(cart), "action": "clear_cart"})
+        self.assertIn('All books have been removed from your cart.', cart)
+        self.assertIn('Your bag is waiting', cart)
+        self.assertNotIn('data-clear-cart', cart)
+        wishlist, _ = self.get(c, "/wishlist")
+        self.assertIn('data-clear-wishlist', wishlist)
+        self.assertIn('id="product-perseus"', wishlist)
+        self.assertIn('id="product-wasteland"', wishlist)
+        with self.assertRaises(HTTPError) as denied:
+            self.post(c, "/wishlist", {"csrf": "bad", "action": "wishlist_clear"})
+        self.assertEqual(denied.exception.code, 403)
+        self.assertIn('id="product-perseus"', self.get(c, "/wishlist")[0])
+        wishlist, _ = self.post(c, "/wishlist", {"csrf": csrf(wishlist), "action": "wishlist_clear"})
+        self.assertIn('All books have been removed from your wishlist.', wishlist)
+        self.assertIn('Your wishlist is empty.', wishlist)
+        self.assertNotIn('data-clear-wishlist', wishlist)
+        self.assertIn('id="product-perseus"', self.get(another, "/wishlist")[0])
+
+    def test_remove_all_account_wishlist_persists(self):
+        c = client()
+        page, _ = self.get(c, "/register")
+        page, _ = self.post(c, "/register", {"csrf": csrf(page), "action": "register", "name": "Clear Reader", "email": "clear-wishlist@example.test", "password": "reading123"})
+        shop, _ = self.get(c, "/shop")
+        for book in ('perseus', 'wasteland'):
+            shop, _ = self.post(c, "/shop", {"csrf": csrf(shop), "action": "wishlist_toggle", "id": book, "set": "1", "return": "shop"})
+        page, _ = self.get(c, "/wishlist")
+        page, _ = self.post(c, "/wishlist", {"csrf": csrf(page), "action": "wishlist_clear"})
+        self.assertIn('Your wishlist is empty.', page)
+        data = json.loads((self.storage / 'data.json').read_text())
+        account = next(u for u in data['users'] if u['email'] == 'clear-wishlist@example.test')
+        self.assertEqual(account['wishlist'], [])
+        account_page, _ = self.get(c, "/account")
+        self.post(c, "/account", {"csrf": csrf(account_page), "action": "logout"})
+        login, _ = self.get(c, "/login")
+        self.post(c, "/login", {"csrf": csrf(login), "action": "login", "email": "clear-wishlist@example.test", "password": "reading123"})
+        page, _ = self.get(c, "/wishlist")
+        self.assertIn('Your wishlist is empty.', page)
+
     def test_home_featured_books(self):
         page, _ = self.get(client(), "/")
         shelf = page.split('id="featured-books"', 1)[1].split('</div><div class="featured-carousel-bar">', 1)[0]
@@ -391,6 +444,9 @@ class AccountFlow(unittest.TestCase):
         product, _ = self.get(second, "/book/history")
         self.assertIn("Out of stock", product)
         page, _ = self.get(first, "/book/history")
+        hidden_guest = client()
+        guest_product, _ = self.get(hidden_guest, "/book/history")
+        self.post(hidden_guest, "/book/history", {"csrf": csrf(guest_product), "action": "wishlist_toggle", "id": "history", "set": "1", "return": "book"})
         page, _ = self.post(first, "/book/history", {"csrf": csrf(page), "action": "wishlist_toggle", "id": "history", "set": "1", "return": "book"})
         self.assertIn('Saved to Wishlist', page)  # Out-of-stock books can still be saved.
         inventory, _ = self.get(admin, "/admin")
@@ -399,6 +455,10 @@ class AccountFlow(unittest.TestCase):
         wishlist, _ = self.get(first, "/wishlist")
         self.assertIn('Some saved books are currently unavailable', wishlist)
         self.assertNotIn('id="product-history"', wishlist)
+        guest_wishlist, _ = self.get(hidden_guest, "/wishlist")
+        self.assertIn('data-clear-wishlist', guest_wishlist)
+        guest_wishlist, _ = self.post(hidden_guest, "/wishlist", {"csrf": csrf(guest_wishlist), "action": "wishlist_clear"})
+        self.assertNotIn('Some saved books are currently unavailable', guest_wishlist)
         shop, _ = self.get(second, "/shop")
         request = Request(self.base + '/shop', urlencode({"csrf": csrf(shop), "action": "wishlist_toggle", "id": "history", "set": "1"}).encode(), headers={"Accept": "application/json"})
         with self.assertRaises(HTTPError) as denied:
@@ -411,6 +471,7 @@ class AccountFlow(unittest.TestCase):
         self.assertIn("Book restored to the shop", inventory)
         self.assertIn("A History of English Literature", self.get(first, "/book/history")[0])
         self.assertIn('id="product-history"', self.get(first, "/wishlist")[0])
+        self.assertNotIn('id="product-history"', self.get(hidden_guest, "/wishlist")[0])
         self.assertIn("A History of English Literature", self.get(first, "/account")[0])
 
     def test_six_character_password_minimum(self):

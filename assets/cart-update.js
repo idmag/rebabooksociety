@@ -4,6 +4,11 @@
   const status = form.querySelector('[data-cart-status]');
   const checkout = document.querySelector('[data-checkout]');
   let timer, dirty = false, saving = false;
+  const clearForm = document.querySelector('[data-clear-cart]');
+  if (clearForm) clearForm.addEventListener('submit', event => {
+    if (!window.confirm('Remove all books from your cart?')) event.preventDefault();
+    else clearTimeout(timer);
+  });
   const animateChange = element => {
     if (!element) return;
     element.classList.remove('cart-changed');
