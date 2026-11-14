@@ -59,3 +59,5 @@
 /* Contact shortcuts in the announcement strip. */
 .announcement-right{display:flex;align-items:center;gap:8px;letter-spacing:.04em}.announcement-icon{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px}.announcement-icon svg{width:15px;height:15px}.announcement-number{white-space:nowrap;font-size:11px}.announcement-right a:hover{color:#fff}
 @media(max-width:620px){.announcement{height:auto;min-height:30px;flex-direction:column;gap:3px;padding:6px 5%}.announcement-right{display:flex}}
+/* Keep cart feedback next to the shopping controls, including after anchor navigation. */
+.cart-feedback{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;margin:20px 0;border:1px solid #b7c5aa;border-radius:6px;background:#e9f0e4;color:#284a2c;font-size:13px;line-height:1.5;scroll-margin-top:16px}.cart-feedback--error{border-color:#d2aba3;background:#f5e6e0;color:var(--wine)}.cart-feedback a{white-space:nowrap;font-weight:700;text-decoration:underline}.cart-feedback + .featured-books{margin-top:24px}@media(max-width:620px){.cart-feedback{align-items:flex-start;flex-direction:column;gap:6px}}
