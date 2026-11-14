@@ -318,7 +318,9 @@ class AccountFlow(unittest.TestCase):
             asc, page = get_order('price-asc')
             self.assertEqual(asc, sorted(prices, key=prices.get))
             self.assertIn('value="price-asc" selected', page)
-            self.assertIn('Sort By', page)
+            self.assertIn('<label for="shop-sort">Sort By</label>', page)
+            self.assertIn('class="sort-select-wrap"', page)
+            self.assertIn('class="sort-chevron"', page)
             self.assertLess(page.index('class="sort-form"'), page.index('class="search-form"'))
             self.assertEqual(get_order('price-desc')[0], list(reversed(asc)))
             titles = {book_id: products[book_id]['title'] for book_id in products}
