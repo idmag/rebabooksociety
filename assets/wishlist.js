@@ -29,8 +29,9 @@
       finishTimer = setTimeout(() => { feedback.hidden = true; }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 220);
     }, 5000);
   };
-  document.querySelectorAll('[data-wishlist-form]').forEach(form => {
-    form.addEventListener('submit', async event => {
+  document.addEventListener('submit', async event => {
+      const form = event.target;
+      if (!form.matches('[data-wishlist-form]')) return;
       event.preventDefault();
       const button = form.querySelector('button');
       pending++;
@@ -64,6 +65,5 @@
           if (clearButton) clearButton.disabled = false;
         }
       }
-    });
   });
 })();

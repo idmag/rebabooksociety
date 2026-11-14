@@ -54,7 +54,7 @@ REBA_BASE_URL=https://your-domain.example/subdirectory
 
 It must be the actual HTTPS site URL, without a trailing slash, query string, or fragment. Without an explicit URL, recovery is disabled on other hosts, including the local preview. A configured URL and sender do not prove that the host can deliver mail; failures are logged by the server. Configure the live site and PHP session cookies for HTTPS only. Set proxy/edge and web-server access logs to omit query strings on `/reset-password`, since the initial recovery link contains a secret token; do not log reset email bodies or tokens. Tokens are stored only as hashes, expire after 30 minutes, can be used once, and are invalidated by a password change. Recovery requests are rate-limited and use the same response whether or not an account exists. These application limits are not a substitute for server-level rate limiting.
 
-The isolated account integration test can be run with `python3 tests/account_flow.py` (set `PHP_BIN` if PHP is not on your PATH). It uses a temporary private data file and disables actual mail delivery; it does not verify your server’s email transport.
+The isolated account integration test can be run with `python3 tests/account_flow.py` (set `PHP_BIN` if PHP is not on your PATH). It uses a temporary private data file and disables actual mail delivery; it does not verify your server’s email transport. The filter and dynamic-card interaction checks can be run with `node tests/shop_filter_ui.js` and `node tests/shop_actions_ui.js`.
 
 ### Administrator and inventory
 

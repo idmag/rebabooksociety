@@ -20,8 +20,9 @@
     }, 5000);
   };
   if (!feedback.hidden) hideLater();
-  document.querySelectorAll('[data-add-form]').forEach(form => {
-    form.addEventListener('submit', async event => {
+  document.addEventListener('submit', async event => {
+      const form = event.target;
+      if (!form.matches('[data-add-form]')) return;
       event.preventDefault();
       const button = form.querySelector('button[type="submit"], button:not([type])');
       button.disabled = true;
@@ -54,6 +55,5 @@
         hideLater();
         button.disabled = false;
       }
-    });
   });
 })();
