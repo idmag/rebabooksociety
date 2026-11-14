@@ -51,7 +51,7 @@ class AccountFlow(unittest.TestCase):
         deadline = time.monotonic() + 20
         while True:
             try:
-                with urlopen(cls.base + "/home", timeout=1) as response:
+                with urlopen(cls.base + "/", timeout=1) as response:
                     if response.status == 200:
                         break
             except (OSError, URLError):
@@ -75,8 +75,22 @@ class AccountFlow(unittest.TestCase):
         with c.open(self.base + path, urlencode(values).encode()) as response:
             return response.read().decode(), response.geturl()
 
+    def test_homepage_canonical_url(self):
+        c = client()
+        page, final_url = self.get(c, "/")
+        self.assertEqual(final_url, self.base + "/")
+        nav = page.split('<nav class="main-nav"', 1)[1].split('</nav>', 1)[0]
+        self.assertRegex(nav, r'<a class="active" aria-current="page" href="/">Home</a>')
+        for old in ("/home", "/home/", "/index.php", "/?page=home"):
+            _, final_url = self.get(c, old)
+            self.assertEqual(final_url, self.base + "/")
+        _, final_url = self.get(c, "/home?source=bookmark")
+        self.assertEqual(final_url, self.base + "/?source=bookmark")
+        _, final_url = self.get(c, "/home?category=Drama")
+        self.assertEqual(final_url, self.base + "/shop?category=Drama#collection")
+
     def test_navigation(self):
-        for path, label in (("/home", "Home"), ("/shop", "The Bookshop"), ("/book/history", "The Bookshop"), ("/about", "Our Story"), ("/contact", "Contact")):
+        for path, label in (("/", "Home"), ("/shop", "The Bookshop"), ("/book/history", "The Bookshop"), ("/about", "Our Story"), ("/contact", "Contact")):
             page, _ = self.get(client(), path)
             nav = page.split('<nav class="main-nav"', 1)[1].split('</nav>', 1)[0]
             self.assertRegex(nav, r'<a class="active" aria-current="page" href="[^"]+">' + re.escape(label) + r'</a>')
@@ -85,7 +99,7 @@ class AccountFlow(unittest.TestCase):
             self.assertIn('Our Story', nav)
 
     def test_footer_link_capitalisation(self):
-        page, _ = self.get(client(), "/home")
+        page, _ = self.get(client(), "/")
         footer = page.split("<footer>", 1)[1].split("</footer>", 1)[0]
         for label in ("Shop All Books", "Our Story", "Visit Us", "Contact", "My Account", "My Orders", "Shopping Bag"):
             self.assertIn(">" + label + "</a>", footer)

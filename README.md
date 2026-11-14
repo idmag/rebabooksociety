@@ -10,11 +10,11 @@ Requires PHP 8.1 or newer. The entry point and assets are at the repository root
 php -S 0.0.0.0:8000 -t . router.php
 ```
 
-Visit http://localhost:8000/home. The development router serves the clean URLs and only exposes storefront assets. Use a web server configured to execute PHP; opening `index.php` directly in a browser will not work.
+Visit http://localhost:8000/. The development router serves the clean URLs and only exposes storefront assets. Use a web server configured to execute PHP; opening `index.php` directly in a browser will not work.
 
 ### Clean URLs in production
 
-Apache needs `mod_rewrite` enabled and `AllowOverride All` (or the equivalent rewrite and access rules in the virtual host) so the included `.htaccess` can route paths such as `/home`, `/shop`, `/about`, `/contact`, `/book/perseus`, `/cart`, and `/account` to `index.php`. Existing `?page=...` bookmarks redirect to the clean paths. Search and category filters continue to use query parameters.
+Apache needs `mod_rewrite` enabled and `AllowOverride All` (or the equivalent rewrite and access rules in the virtual host) so the included `.htaccess` can route paths such as `/shop`, `/about`, `/contact`, `/book/perseus`, `/cart`, and `/account` to `index.php`. The homepage is at `/`; old `/home` and `?page=...` bookmarks redirect to the clean paths. Search and category filters continue to use query parameters.
 
 For Nginx, configure the normal PHP-FPM handler and route non-file requests to the front controller, for example:
 

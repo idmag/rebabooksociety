@@ -26,7 +26,7 @@ function e($s): string { return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SU
 $basePath = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php')), '/.');
 function url($page='home', $args=[]): string {
  global $basePath;
- $path = $basePath.'/'.rawurlencode($page);
+ $path = $basePath.'/'.($page === 'home' ? '' : rawurlencode($page));
  if ($page === 'book' && isset($args['id'])) { $path .= '/'.rawurlencode((string)$args['id']); unset($args['id']); }
  $query = http_build_query($args);
  return $path.($query !== '' ? '?'.$query : '');
@@ -122,7 +122,7 @@ $removedFromCart=false;
 foreach (($_SESSION['cart']??[]) as $id=>$qty) if (!isset($books[$id])) { unset($_SESSION['cart'][$id]); $removedFromCart=true; }
 if ($removedFromCart) flash('An unavailable book was removed from your bag.');
 $requestPath = rawurldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
-$relativePath = $basePath !== '' && str_starts_with($requestPath, $basePath.'/') ? substr($requestPath, strlen($basePath)) : $requestPath;
+$relativePath = $basePath !== '' && $requestPath === $basePath ? '/' : ($basePath !== '' && str_starts_with($requestPath, $basePath.'/') ? substr($requestPath, strlen($basePath)) : $requestPath);
 $segments = explode('/', trim($relativePath, '/'));
 $page = $segments[0] === '' || $segments[0] === 'index.php' ? 'home' : $segments[0];
 if ($page === 'book' && count($segments) === 2 && $segments[1] !== '') $_GET['id'] = $segments[1];
@@ -133,7 +133,11 @@ if ($legacy) {
  $page = $_GET['page'];
  if ($_SERVER['REQUEST_METHOD'] === 'GET') { $args = $_GET; unset($args['page']); header('Location: '.url($page, $args), true, 301); exit; }
 }
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$legacy && ($relativePath === '/' || ($relativePath !== '/' && str_ends_with($relativePath, '/')))) {
+// The homepage lives at the site root. Keep old homepage URLs as redirects.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$legacy && (($basePath !== '' && $requestPath === $basePath) || in_array($relativePath, ['/home', '/home/', '/index.php'], true))) {
+ header('Location: '.url('home', $_GET), true, 301); exit;
+}
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$legacy && $relativePath !== '/' && str_ends_with($relativePath, '/')) {
  $query = $_GET; header('Location: '.url($page, $query), true, 301); exit;
 }
 // Old catalogue links on /home continue to work after moving the catalogue to /shop.
