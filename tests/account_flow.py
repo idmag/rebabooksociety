@@ -4,6 +4,7 @@ Exercises account settings and recovery against an isolated PHP server and a
 private temporary data file. No real reset email is sent.
 """
 import hashlib
+import html
 import http.cookiejar
 import json
 import os
@@ -294,6 +295,26 @@ class AccountFlow(unittest.TestCase):
         self.post(c, "/login", {"csrf": csrf(login), "action": "login", "email": "clear-wishlist@example.test", "password": "reading123"})
         page, _ = self.get(c, "/wishlist")
         self.assertIn('Your wishlist is empty.', page)
+
+    def test_search_clear_preserves_categories(self):
+        c = client()
+        page, _ = self.get(c, "/shop")
+        self.assertRegex(page, r'<a class="search-clear"[^>]*aria-label="Clear search"[^>]* hidden>')
+        query = urlencode([('category[]', 'Drama'), ('category[]', 'Fiction'), ('q', 'Sea')])
+        page, _ = self.get(c, "/shop?" + query)
+        match = re.search(r'<a class="search-clear"[^>]*href="([^"]+)"[^>]*>', page)
+        self.assertIsNotNone(match)
+        self.assertNotIn(' hidden', match.group(0))
+        self.assertIn('aria-label="Clear search"', match.group(0))
+        href = html.unescape(match.group(1))
+        args = parse_qs(urlsplit(href).query)
+        self.assertEqual([args['category[0]'][0], args['category[1]'][0]], ['Drama', 'Fiction'])
+        self.assertNotIn('q', args)
+        page, _ = self.get(c, href)
+        self.assertEqual(page.count('class="book-card"'), 4)
+        self.assertIn('value="Drama" checked', page)
+        self.assertIn('value="Fiction" checked', page)
+        self.assertRegex(page, r'<a class="search-clear"[^>]* hidden>')
 
     def test_shop_multi_category_filters(self):
         c = client()

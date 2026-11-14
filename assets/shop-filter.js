@@ -6,12 +6,15 @@
   const checkboxSelector = 'input[type="checkbox"][name="category[]"]';
   const checkboxes = () => Array.from(form.querySelectorAll(checkboxSelector));
   let applied = checkboxes().filter(box => box.checked).map(box => box.value);
+  let appliedQuery = form.querySelector('input[name="q"]')?.value || '';
   let controller, sequence = 0;
 
-  const apply = async (url, pushHistory) => {
+  const apply = async (url, pushHistory, focusSearch = false) => {
     if (controller) controller.abort();
     controller = new AbortController();
     const current = ++sequence;
+    const initialSearch = document.querySelector('.shop-search input[name="q"]');
+    const initialValue = initialSearch ? initialSearch.value : '';
     const results = document.querySelector('.shop-results');
     if (results) results.setAttribute('aria-busy', 'true');
     error.hidden = true;
@@ -34,15 +37,31 @@
       else if (currentQuery) currentQuery.remove();
       checkboxes().forEach(box => { box.checked = selected.includes(box.value); });
       applied = selected;
+      appliedQuery = query ? query.value : '';
       clearLink.hidden = nextClear.hidden;
       clearLink.setAttribute('href', nextClear.getAttribute('href'));
+      const oldSearch = previousResults.querySelector('input[name="q"]');
+      const nextSearch = nextResults.querySelector('input[name="q"]');
+      const nextSearchClear = nextResults.querySelector('[data-clear-search]');
+      const restoreFocus = focusSearch || (oldSearch && document.activeElement === oldSearch);
+      // Do not discard text typed while the request was in flight.
+      if (oldSearch && nextSearch && oldSearch.value !== initialValue) {
+        nextSearch.value = oldSearch.value;
+        if (nextSearchClear) nextSearchClear.hidden = !nextSearch.value;
+      }
       previousResults.replaceWith(nextResults);
+      if (restoreFocus && nextSearch) nextSearch.focus({preventScroll: true});
       if (pushHistory) history.pushState(null, '', url.pathname + url.search + location.hash);
     } catch (err) {
       if (err.name === 'AbortError' || current !== sequence) return;
       if (!pushHistory) { location.reload(); return; }
       checkboxes().forEach(box => { box.checked = applied.includes(box.value); });
-      error.textContent = 'Could not update the categories. Please try again.';
+      if (focusSearch) {
+        const search = document.querySelector('.shop-search input[name="q"]');
+        const clear = document.querySelector('[data-clear-search]');
+        if (search && search.value === '') { search.value = appliedQuery; if (clear) clear.hidden = !search.value; search.focus({preventScroll: true}); }
+      }
+      error.textContent = focusSearch ? 'Could not clear the search. Please try again.' : 'Could not update the categories. Please try again.';
       error.hidden = false;
     } finally {
       if (current === sequence) {
@@ -67,6 +86,22 @@
     event.preventDefault();
     checkboxes().forEach(box => { box.checked = false; });
     apply(filterUrl(), true);
+  });
+  document.addEventListener('input', event => {
+    if (!event.target.matches('#search')) return;
+    const clear = event.target.closest('.search-form').querySelector('[data-clear-search]');
+    if (clear) clear.hidden = !event.target.value;
+  });
+  document.addEventListener('click', event => {
+    const clear = event.target.closest('[data-clear-search]');
+    if (!clear) return;
+    event.preventDefault();
+    const search = clear.closest('.search-form').querySelector('input[name="q"]');
+    if (!search) return;
+    search.value = '';
+    clear.hidden = true;
+    search.focus({preventScroll: true});
+    apply(filterUrl(), true, true);
   });
   window.addEventListener('popstate', () => apply(new URL(location.href), false));
 })();
