@@ -84,6 +84,12 @@ class AccountFlow(unittest.TestCase):
             self.assertIn('The Bookshop', nav)
             self.assertIn('Our Story', nav)
 
+    def test_footer_link_capitalisation(self):
+        page, _ = self.get(client(), "/home")
+        footer = page.split("<footer>", 1)[1].split("</footer>", 1)[0]
+        for label in ("Shop All Books", "Our Story", "Visit Us", "Contact", "My Account", "My Orders", "Shopping Bag"):
+            self.assertIn(">" + label + "</a>", footer)
+
     def test_contact_details(self):
         page, _ = self.get(client(), "/contact")
         for text in ("Mobile / WhatsApp No.", "+91 6289459775", "tel:+916289459775", "https://wa.me/916289459775", "Stall No. 89, College Street", "(Near Calcutta University)", "Kolkata - 700009"):
@@ -118,6 +124,7 @@ class AccountFlow(unittest.TestCase):
         page, _ = self.post(admin, "/reset-password", {"csrf": csrf(page), "action": "reset_password", "token": raw, "new_password": "verified-pass-123", "confirm_password": "verified-pass-123"})
         page, _ = self.post(admin, "/login", {"csrf": csrf(page), "action": "login", "email": "ahmadmdujan@gmail.com", "password": "verified-pass-123"})
         self.assertIn("Manage inventory", page)
+        self.assertIn(">Manage Inventory</a>", page.split("<footer>", 1)[1])
         inventory, _ = self.get(admin, "/admin")
         self.assertIn("A History of English Literature", inventory)
         self.assertIn("Untracked", inventory)
