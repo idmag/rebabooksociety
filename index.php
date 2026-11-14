@@ -154,8 +154,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
    $limit=($b['stock']??null)===null ? 20 : min(20,(int)$b['stock']);
    $added=$quantity<$limit;
    if ($added) $_SESSION['cart'][$id]=++$quantity;
-   $count=$quantity.' '.($quantity===1?'copy':'copies').' of this book '.($quantity===1?'is':'are').' in your cart.';
-   $feedback=['id'=>$id, 'message'=>$added ? '“'.$b['title'].'” was added to your cart. '.$count : '“'.$b['title'].'” could not be added: the available quantity or cart limit has been reached. '.$count, 'success'=>$added];
+   $feedback=['id'=>$id, 'message'=>$added ? '“'.$b['title'].'” was added to your cart.' : '“'.$b['title'].'” could not be added: the available quantity or cart limit has been reached.', 'success'=>$added];
   } else $feedback=['id'=>null, 'message'=>'This book is no longer available.', 'success'=>false];
   if (str_contains($_SERVER['HTTP_ACCEPT']??'', 'application/json')) {
    header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store');
