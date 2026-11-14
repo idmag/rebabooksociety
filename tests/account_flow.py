@@ -89,6 +89,20 @@ class AccountFlow(unittest.TestCase):
         _, final_url = self.get(c, "/home?category=Drama")
         self.assertEqual(final_url, self.base + "/shop?category=Drama#collection")
 
+    def test_home_featured_books(self):
+        page, _ = self.get(client(), "/")
+        shelf = page.split('id="featured-books"', 1)[1].split('</div><div class="featured-carousel-bar">', 1)[0]
+        self.assertEqual(shelf.count('class="book-card"'), 4)
+        self.assertIn('data-featured-prev', page)
+        self.assertIn('data-featured-next', page)
+        self.assertIn('featured-carousel.js', page)
+        with urlopen(self.base + "/assets/featured-carousel.js") as response:
+            self.assertEqual(response.status, 200)
+            self.assertIn(b'scrollBy', response.read())
+        shop, _ = self.get(client(), "/shop")
+        self.assertEqual(shop.count('class="book-card"'), 7)
+        self.assertNotIn('featured-carousel.js', shop)
+
     def test_favicon(self):
         page, _ = self.get(client(), "/")
         self.assertIn('href="/assets/favicon.ico"', page)
