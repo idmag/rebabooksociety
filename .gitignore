@@ -1,0 +1,4 @@
+/tmp/
+/.tmpdeps/
+/storage/*.json
+/storage/*.lock
