@@ -89,6 +89,15 @@ class AccountFlow(unittest.TestCase):
         _, final_url = self.get(c, "/home?category=Drama")
         self.assertEqual(final_url, self.base + "/shop?category=Drama#collection")
 
+    def test_favicon(self):
+        page, _ = self.get(client(), "/")
+        self.assertIn('href="/assets/favicon.ico"', page)
+        self.assertIn('href="/assets/favicon.png"', page)
+        for path in ("/assets/favicon.ico", "/assets/favicon.png"):
+            with urlopen(self.base + path) as response:
+                self.assertEqual(response.status, 200)
+                self.assertGreater(len(response.read()), 100)
+
     def test_navigation(self):
         for path, label in (("/", "Home"), ("/shop", "Shop"), ("/book/history", "Shop"), ("/about", "About Us"), ("/contact", "Contact")):
             page, _ = self.get(client(), path)
