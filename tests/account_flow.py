@@ -90,13 +90,13 @@ class AccountFlow(unittest.TestCase):
         self.assertEqual(final_url, self.base + "/shop?category=Drama#collection")
 
     def test_navigation(self):
-        for path, label in (("/", "Home"), ("/shop", "The Bookshop"), ("/book/history", "The Bookshop"), ("/about", "Our Story"), ("/contact", "Contact")):
+        for path, label in (("/", "Home"), ("/shop", "Shop"), ("/book/history", "Shop"), ("/about", "About Us"), ("/contact", "Contact")):
             page, _ = self.get(client(), path)
             nav = page.split('<nav class="main-nav"', 1)[1].split('</nav>', 1)[0]
             self.assertRegex(nav, r'<a class="active" aria-current="page" href="[^"]+">' + re.escape(label) + r'</a>')
             self.assertEqual(nav.count('aria-current="page"'), 1)
-            self.assertIn('The Bookshop', nav)
-            self.assertIn('Our Story', nav)
+            self.assertIn('Shop', nav)
+            self.assertIn('About Us', nav)
 
     def test_footer_link_capitalisation(self):
         page, _ = self.get(client(), "/")
