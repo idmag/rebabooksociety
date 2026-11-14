@@ -112,6 +112,18 @@ class AccountFlow(unittest.TestCase):
                 self.assertEqual(response.status, 200)
                 self.assertGreater(len(response.read()), 100)
 
+    def test_announcement_contact_links(self):
+        for path in ("/", "/contact"):
+            page, _ = self.get(client(), path)
+            strip = page.split('<div class="announcement">', 1)[1].split('</div>', 1)[0]
+            self.assertIn('href="tel:+916289459775"', strip)
+            self.assertIn('href="https://wa.me/916289459775"', strip)
+            self.assertIn('+91 6289459775', strip)
+            self.assertIn('aria-label="Call Reba Book Society"', strip)
+            self.assertIn('aria-label="Chat with Reba Book Society on WhatsApp"', strip)
+            self.assertEqual(strip.count('<svg'), 2)
+            self.assertNotIn('COLLEGE STREET, KOLKATA', strip)
+
     def test_navigation(self):
         for path, label in (("/", "Home"), ("/shop", "Shop"), ("/book/history", "Shop"), ("/about", "About Us"), ("/contact", "Contact")):
             page, _ = self.get(client(), path)
