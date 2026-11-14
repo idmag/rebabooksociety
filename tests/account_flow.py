@@ -296,6 +296,72 @@ class AccountFlow(unittest.TestCase):
         page, _ = self.get(c, "/wishlist")
         self.assertIn('Your wishlist is empty.', page)
 
+    def test_shop_sorting(self):
+        data_file = self.storage / 'data.json'
+        original = data_file.read_text()
+        try:
+            data = json.loads(original)
+            products = data['products']
+            prices = {'perseus': 210, 'history': 10, 'justice': 50, 'wasteland': 500, 'biographia': 100, 'awakening': 70, 'old-man-and-the-sea': 900}
+            for book_id, price in prices.items():
+                products[book_id]['price'] = price
+                products[book_id]['mrp'] = max(price, products[book_id].get('mrp', 0))
+                products[book_id]['active'] = True
+                products[book_id].pop('added_at', None)
+            for book_id, timestamp in {'history': 1000, 'perseus': 2000, 'justice': 3000, 'wasteland': 3000}.items():
+                products[book_id]['added_at'] = timestamp
+            data_file.write_text(json.dumps(data))
+            c = client()
+            def get_order(sort, extra=''):
+                page, _ = self.get(c, '/shop?sort=' + sort + extra)
+                return re.findall(r'<article class="book-card" id="product-([^"]+)', page), page
+            asc, page = get_order('price-asc')
+            self.assertEqual(asc, sorted(prices, key=prices.get))
+            self.assertIn('value="price-asc" selected', page)
+            self.assertIn('Sort By', page)
+            self.assertLess(page.index('class="sort-form"'), page.index('class="search-form"'))
+            self.assertEqual(get_order('price-desc')[0], list(reversed(asc)))
+            titles = {book_id: products[book_id]['title'] for book_id in products}
+            alpha = sorted(prices, key=lambda book_id: titles[book_id].lower())
+            self.assertEqual(get_order('title-asc')[0], alpha)
+            self.assertEqual(get_order('title-desc')[0], list(reversed(alpha)))
+            newest, page = get_order('newest')
+            self.assertEqual(newest, ['justice', 'wasteland', 'perseus', 'history', 'biographia', 'awakening', 'old-man-and-the-sea'])
+            self.assertIn('without a recorded date are listed last', page)
+            self.assertEqual(get_order('oldest')[0], ['history', 'perseus', 'justice', 'wasteland', 'biographia', 'awakening', 'old-man-and-the-sea'])
+            self.assertEqual(get_order('invalid')[0], list(prices))
+            extra = '&category%5B%5D=Drama&category%5B%5D=Fiction'
+            order, page = get_order('price-asc', extra)
+            self.assertEqual(order, ['justice', 'awakening', 'perseus', 'old-man-and-the-sea'])
+            self.assertIn('name="sort" value="price-asc"', page)
+            order, page = get_order('price-asc', extra + '&q=Sea')
+            self.assertEqual(order, ['old-man-and-the-sea'])
+            search = page.split('<form class="search-form"', 1)[1].split('</form>', 1)[0]
+            self.assertIn('name="sort" value="price-asc"', search)
+            match = re.search(r'<a class="search-clear"[^>]*href="([^"]+)"', search)
+            args = parse_qs(urlsplit(html.unescape(match.group(1))).query)
+            self.assertEqual(args['sort'], ['price-asc'])
+            self.assertNotIn('q', args)
+            clear = re.search(r'<a class="category-clear" href="([^"]+)"', page)
+            args = parse_qs(urlsplit(html.unescape(clear.group(1))).query)
+            self.assertEqual((args['sort'], args['q']), (['price-asc'], ['Sea']))
+            path = '/shop?sort=price-asc' + extra + '&q=Sea'
+            page, final = self.post(c, path, {'csrf': csrf(page), 'action': 'add', 'id': 'old-man-and-the-sea', 'return': 'shop'})
+            self.assertEqual(parse_qs(urlsplit(final).query)['sort'], ['price-asc'])
+            page, final = self.post(c, path, {'csrf': csrf(page), 'action': 'wishlist_toggle', 'id': 'old-man-and-the-sea', 'set': '1', 'return': 'shop'})
+            self.assertEqual(parse_qs(urlsplit(final).query)['sort'], ['price-asc'])
+            # New entries are dated on first insertion; older saved records are not assigned false dates.
+            data = json.loads(data_file.read_text())
+            del data['products']['awakening']
+            data_file.write_text(json.dumps(data))
+            start = int(time.time())
+            self.get(c, '/shop')
+            data = json.loads(data_file.read_text())
+            self.assertGreaterEqual(data['products']['awakening']['added_at'], start)
+            self.assertNotIn('added_at', data['products']['biographia'])
+        finally:
+            data_file.write_text(original)
+
     def test_search_clear_preserves_categories(self):
         c = client()
         page, _ = self.get(c, "/shop")

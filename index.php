@@ -2,6 +2,7 @@
 declare(strict_types=1);
 const REBA_ADMIN_EMAIL = 'ahmadmdujan@gmail.com';
 const REBA_CATEGORIES = ['Fiction', 'Poetry', 'Drama', 'Literary Studies'];
+const REBA_SORT_OPTIONS = ['recommended'=>'Recommended', 'price-asc'=>'Price: Low to High', 'price-desc'=>'Price: High to Low', 'newest'=>'Date Added: Newest First', 'oldest'=>'Date Added: Oldest First', 'title-asc'=>'Title: A to Z', 'title-desc'=>'Title: Z to A'];
 const REBA_RESET_FROM_EMAIL = 'info@rebabooksociety.websolve.co.in';
 // Customer records must be stored outside the web server document root.
 ini_set('session.use_strict_mode', '1');
@@ -38,11 +39,40 @@ function selectedCategories(): array {
  $value=$_GET['category']??[]; $values=is_array($value)?$value:[$value];
  return array_values(array_unique(array_filter($values, fn($v)=>is_string($v) && in_array($v,REBA_CATEGORIES,true))));
 }
+function selectedSort(): string {
+ $sort=$_GET['sort']??'recommended';
+ return is_string($sort) && isset(REBA_SORT_OPTIONS[$sort]) ? $sort : 'recommended';
+}
+function bookAddedAt(array $book): int {
+ return is_numeric($book['added_at']??null) ? max(0,(int)$book['added_at']) : 0;
+}
+function sortShopBooks(array $books, string $sort): array {
+ if ($sort==='recommended') return $books;
+ $positions=array_flip(array_keys($books));
+ uksort($books, function($a,$b) use($books,$sort,$positions) {
+  $first=$books[$a]; $second=$books[$b]; $comparison=0;
+  if ($sort==='price-asc' || $sort==='price-desc') {
+   $comparison=(int)$first['price'] <=> (int)$second['price'];
+   if ($sort==='price-desc') $comparison=-$comparison;
+  } elseif ($sort==='title-asc' || $sort==='title-desc') {
+   $comparison=strnatcasecmp($first['title'],$second['title']);
+   if ($sort==='title-desc') $comparison=-$comparison;
+  } elseif ($sort==='newest' || $sort==='oldest') {
+   // Legacy inventory has no reliable creation date: keep it after dated entries in both directions.
+   $at=bookAddedAt($first); $bt=bookAddedAt($second);
+   if (!$at || !$bt) $comparison=($at ? 0 : 1) <=> ($bt ? 0 : 1);
+   else { $comparison=$at <=> $bt; if ($sort==='newest') $comparison=-$comparison; }
+  }
+  return $comparison ?: ($positions[$a] <=> $positions[$b]);
+ });
+ return $books;
+}
 function shopArgs(): array {
  $args=[];
  if (isset($_GET['category']) && is_string($_GET['category']) && (in_array($_GET['category'],REBA_CATEGORIES,true) || $_GET['category']==='All books')) $args['category']=$_GET['category'];
  elseif (selectedCategories()) $args['category']=selectedCategories();
  if (isset($_GET['q']) && is_string($_GET['q'])) $args['q']=$_GET['q'];
+ if (selectedSort()!=='recommended') $args['sort']=selectedSort();
  return $args;
 }
 // Content-based versioning prevents a cached stylesheet from being paired with newer markup.
@@ -141,7 +171,7 @@ function icon($name): string { $paths=['search'=>'<circle cx="11" cy="11" r="7"/
 // Persist catalogue changes alongside customer data; preserve edited and hidden books across deployments.
 $allBooks=db(function(&$d) use($books) {
  if (!isset($d['products'])) $d['products']=[];
- foreach($books as $id=>$book) if (!array_key_exists($id,$d['products'])) { $book['mrp']=$book['price']; $book['stock']=null; $book['active']=true; $d['products'][$id]=$book; }
+ foreach($books as $id=>$book) if (!array_key_exists($id,$d['products'])) { $book['mrp']=$book['price']; $book['stock']=null; $book['active']=true; $book['added_at']=time(); $d['products'][$id]=$book; }
  foreach($d['products'] as &$book) if (!array_key_exists('mrp', $book)) $book['mrp']=$book['price'];
  unset($book);
  return $d['products'];
@@ -422,9 +452,13 @@ function bookCard($id,$b,$index=0,$return='shop') { ?>
 <section class="closing"><span class="closing-rule"></span><p>FOR READERS, EVERYWHERE</p><h2>Stay curious. <em>Keep reading.</em></h2><a href="<?= e(url('shop')) ?>" class="under-link">Back to the books ↗</a></section>
 <?php elseif($page==='shop'):
  $q=is_string($_GET['q']??null) ? trim($_GET['q']) : '';
- $categories=selectedCategories();
- $filtered=array_filter($books,fn($b)=>(!$categories || in_array($b['category'],$categories,true)) && ($q==='' || stripos($b['title'].' '.$b['author'].' '.$b['category'].' '.$b['isbn'],$q)!==false || (preg_match('/^[0-9 -]*[0-9][0-9 -]*$/', $q) && str_contains(str_replace('-', '', $b['isbn']), str_replace(['-', ' '], '', $q))))); ?>
-<section class="collection section-wrap shop-page" id="collection"><div class="section-heading"><div><p class="overline">THE BOOKSHOP</p><h1>Find your next read<span>.</span></h1><p>Classics, poetry, drama and more, from our shelves to yours.</p></div></div><div class="shop-layout"><aside class="shop-sidebar" aria-label="Filter books"><form method="get" action="<?= e(url('shop')) ?>#collection" class="category-form"><fieldset><legend>Categories</legend><p>Choose one or more.</p><?php foreach(REBA_CATEGORIES as $c): ?><label class="category-option"><input type="checkbox" name="category[]" value="<?= e($c) ?>" <?= in_array($c,$categories,true)?'checked':'' ?>><span><?= e($c) ?></span></label><?php endforeach; ?></fieldset><?php if($q!==''): ?><input type="hidden" name="q" value="<?= e($q) ?>"><?php endif; ?><noscript><button class="button outline category-apply" type="submit">Update Categories</button></noscript><a class="category-clear" href="<?= e(url('shop',$q!==''?['q'=>$q]:[])) ?>#collection"<?= $categories?'':' hidden' ?>>Clear Categories</a><p class="filter-error" data-filter-error role="status" hidden></p></form></aside><div class="shop-results"><div class="shop-search"><form class="search-form" method="get" action="<?= e(url('shop')) ?>#collection"><?php foreach($categories as $c): ?><input type="hidden" name="category[]" value="<?= e($c) ?>"><?php endforeach; ?><label for="search" class="sr-only">Search books</label><input id="search" name="q" placeholder="Search title, author or ISBN" value="<?= e($q) ?>"><a class="search-clear" data-clear-search href="<?= e(url('shop',$categories?['category'=>$categories]:[])) ?>#collection" aria-label="Clear search" title="Clear search"<?= $q!==''?'':' hidden' ?>><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a><button aria-label="Search"><?= icon('search') ?></button></form></div><div class="catalogue-line" role="status" aria-live="polite"><span>THE COLLECTION &nbsp; / &nbsp; <?= count($filtered) ?> <?= count($filtered) === 1 ? 'TITLE' : 'TITLES' ?></span></div><div class="book-grid"><?php $i=0; foreach($filtered as $id=>$b) bookCard($id,$b,$i++); ?></div><?php if(!$filtered): ?><div class="empty">No books found. Try another search or category. <a href="<?= e(url('shop')) ?>#collection">View all books</a></div><?php endif; ?><p class="pricing-note">Prices shown are indicative starter prices and will be confirmed with your order request.</p></div></div></section>
+ $categories=selectedCategories(); $sort=selectedSort();
+ $filtered=array_filter($books,fn($b)=>(!$categories || in_array($b['category'],$categories,true)) && ($q==='' || stripos($b['title'].' '.$b['author'].' '.$b['category'].' '.$b['isbn'],$q)!==false || (preg_match('/^[0-9 -]*[0-9][0-9 -]*$/', $q) && str_contains(str_replace('-', '', $b['isbn']), str_replace(['-', ' '], '', $q)))));
+ $filtered=sortShopBooks($filtered,$sort);
+ $hasUndated=in_array($sort,['newest','oldest'],true) && count(array_filter($filtered,fn($b)=>bookAddedAt($b)===0))>0;
+ $clearCategoryArgs=$q!==''?['q'=>$q]:[]; $clearSearchArgs=$categories?['category'=>$categories]:[];
+ if ($sort!=='recommended') { $clearCategoryArgs['sort']=$sort; $clearSearchArgs['sort']=$sort; } ?>
+<section class="collection section-wrap shop-page" id="collection"><div class="section-heading"><div><p class="overline">THE BOOKSHOP</p><h1>Find your next read<span>.</span></h1><p>Classics, poetry, drama and more, from our shelves to yours.</p></div></div><div class="shop-layout"><aside class="shop-sidebar" aria-label="Filter books"><form method="get" action="<?= e(url('shop')) ?>#collection" class="category-form"><fieldset><legend>Categories</legend><p>Choose one or more.</p><?php foreach(REBA_CATEGORIES as $c): ?><label class="category-option"><input type="checkbox" name="category[]" value="<?= e($c) ?>" <?= in_array($c,$categories,true)?'checked':'' ?>><span><?= e($c) ?></span></label><?php endforeach; ?></fieldset><?php if($q!==''): ?><input type="hidden" name="q" value="<?= e($q) ?>"><?php endif; ?><?php if($sort!=='recommended'): ?><input type="hidden" name="sort" value="<?= e($sort) ?>"><?php endif; ?><noscript><button class="button outline category-apply" type="submit">Update Categories</button></noscript><a class="category-clear" href="<?= e(url('shop',$clearCategoryArgs)) ?>#collection"<?= $categories?'':' hidden' ?>>Clear Categories</a><p class="filter-error" data-filter-error role="status" hidden></p></form></aside><div class="shop-results"><div class="shop-search"><form class="sort-form" method="get" action="<?= e(url('shop')) ?>#collection"><?php foreach($categories as $c): ?><input type="hidden" name="category[]" value="<?= e($c) ?>"><?php endforeach; ?><?php if($q!==''): ?><input type="hidden" name="q" value="<?= e($q) ?>"><?php endif; ?><label for="shop-sort">Sort By</label><select id="shop-sort" name="sort" data-sort-select><?php foreach(REBA_SORT_OPTIONS as $value=>$label): ?><option value="<?= e($value) ?>" <?= $sort===$value?'selected':'' ?>><?= e($label) ?></option><?php endforeach; ?></select><noscript><button class="sort-submit" type="submit">Sort</button></noscript></form><form class="search-form" method="get" action="<?= e(url('shop')) ?>#collection"><?php foreach($categories as $c): ?><input type="hidden" name="category[]" value="<?= e($c) ?>"><?php endforeach; ?><?php if($sort!=='recommended'): ?><input type="hidden" name="sort" value="<?= e($sort) ?>"><?php endif; ?><label for="search" class="sr-only">Search books</label><input id="search" name="q" placeholder="Search title, author or ISBN" value="<?= e($q) ?>"><a class="search-clear" data-clear-search href="<?= e(url('shop',$clearSearchArgs)) ?>#collection" aria-label="Clear search" title="Clear search"<?= $q!==''?'':' hidden' ?>><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a><button aria-label="Search"><?= icon('search') ?></button></form></div><?php if($hasUndated): ?><p class="sort-date-note">Older catalogue entries without a recorded date are listed last.</p><?php endif; ?><div class="catalogue-line" role="status" aria-live="polite"><span>THE COLLECTION &nbsp; / &nbsp; <?= count($filtered) ?> <?= count($filtered) === 1 ? 'TITLE' : 'TITLES' ?></span></div><div class="book-grid"><?php $i=0; foreach($filtered as $id=>$b) bookCard($id,$b,$i++); ?></div><?php if(!$filtered): ?><div class="empty">No books found. Try another search or category. <a href="<?= e(url('shop')) ?>#collection">View all books</a></div><?php endif; ?><p class="pricing-note">Prices shown are indicative starter prices and will be confirmed with your order request.</p></div></div></section>
 <?php elseif($page==='book' && isset($books[$_GET['id']??''])): $id=$_GET['id']; $b=$books[$id]; ?>
 <section class="inner section-wrap"><p class="breadcrumbs"><a href="<?= e(url()) ?>">Home</a> / <a href="<?= e(url('shop')) ?>">Books</a> / <?= e($b['title']) ?></p><div class="product-detail"><fieldset class="cover-gallery">
  <legend class="sr-only">Choose a cover image</legend>
