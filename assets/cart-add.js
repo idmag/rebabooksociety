@@ -44,6 +44,8 @@
         message.textContent = 'We could not confirm the cart update. Refresh the page to check your cart before trying again.';
         feedback.classList.add('cart-feedback--error');
       } finally {
+        const wishlistFeedback = document.getElementById('wishlist-feedback');
+        if (wishlistFeedback) wishlistFeedback.hidden = true;
         feedback.classList.remove('cart-feedback--enter', 'cart-feedback--leaving');
         feedback.hidden = true;
         void feedback.offsetWidth;
