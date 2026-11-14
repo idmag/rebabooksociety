@@ -14,7 +14,7 @@ Visit http://localhost:8000/. The development router serves the clean URLs and o
 
 ### Clean URLs in production
 
-Apache needs `mod_rewrite` enabled and `AllowOverride All` (or the equivalent rewrite and access rules in the virtual host) so the included `.htaccess` can route paths such as `/shop`, `/about`, `/contact`, `/book/perseus`, `/cart`, `/wishlist`, and `/account` to `index.php`. The homepage is at `/`; old `/home` and `?page=...` bookmarks redirect to the clean paths. Search and category filters continue to use query parameters.
+Apache needs `mod_rewrite` enabled and `AllowOverride All` (or the equivalent rewrite and access rules in the virtual host) so the included `.htaccess` can route paths such as `/shop`, `/about`, `/contact`, `/book/perseus`, `/cart`, `/wishlist`, and `/account` to `index.php`. The homepage is at `/`; old `/home` and `?page=...` bookmarks redirect to the clean paths. Search and the multi-select category filters use query parameters; older single-category links remain supported.
 
 For Nginx, configure the normal PHP-FPM handler and route non-file requests to the front controller, for example:
 

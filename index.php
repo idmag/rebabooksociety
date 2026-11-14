@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 const REBA_ADMIN_EMAIL = 'ahmadmdujan@gmail.com';
+const REBA_CATEGORIES = ['Fiction', 'Poetry', 'Drama', 'Literary Studies'];
 const REBA_RESET_FROM_EMAIL = 'info@rebabooksociety.websolve.co.in';
 // Customer records must be stored outside the web server document root.
 ini_set('session.use_strict_mode', '1');
@@ -32,6 +33,18 @@ function url($page='home', $args=[]): string {
  return $path.($query !== '' ? '?'.$query : '');
 }
 function asset($path): string { global $basePath; return $basePath.'/assets/'.$path; }
+// Accept both legacy single-category URLs and the multi-select form's category array.
+function selectedCategories(): array {
+ $value=$_GET['category']??[]; $values=is_array($value)?$value:[$value];
+ return array_values(array_unique(array_filter($values, fn($v)=>is_string($v) && in_array($v,REBA_CATEGORIES,true))));
+}
+function shopArgs(): array {
+ $args=[];
+ if (isset($_GET['category']) && is_string($_GET['category']) && (in_array($_GET['category'],REBA_CATEGORIES,true) || $_GET['category']==='All books')) $args['category']=$_GET['category'];
+ elseif (selectedCategories()) $args['category']=selectedCategories();
+ if (isset($_GET['q']) && is_string($_GET['q'])) $args['q']=$_GET['q'];
+ return $args;
+}
 // Content-based versioning prevents a cached stylesheet from being paired with newer markup.
 function stylesheet(): string {
  $file = __DIR__.'/assets/storefront.css';
@@ -207,7 +220,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   flash($message); $return=$_POST['return']??'';
   if ($return==='wishlist') go('wishlist');
   if ($return==='book' && isset($books[$id])) { header('Location: '.url('book',['id'=>$id]).'#product-'.rawurlencode($id)); exit; }
-  $args=[]; foreach(['category','q'] as $key) if (isset($_GET[$key]) && is_string($_GET[$key])) $args[$key]=$_GET[$key];
+  $args=shopArgs();
   $destination=$return==='home' ? url('home') : url('shop',$args);
   header('Location: '.$destination.'#product-'.rawurlencode($id)); exit;
  }
@@ -230,7 +243,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   elseif ($return==='home') $destination=url('home');
   elseif ($return==='wishlist') $destination=url('wishlist');
   else {
-   $args=[]; foreach(['category','q'] as $key) if (isset($_GET[$key]) && is_string($_GET[$key])) $args[$key]=$_GET[$key];
+   $args=shopArgs();
    $destination=url('shop',$args);
   }
   header('Location: '.$destination.'#'.($feedback['id']!==null ? 'product-'.rawurlencode($id) : 'cart-feedback')); exit;
@@ -408,8 +421,10 @@ function bookCard($id,$b,$index=0,$return='shop') { ?>
 <section class="story-banner"><div class="story-visual"><div class="story-visual-inner"><img class="story-logo" src="<?= e(asset('reba-logo-light.svg')) ?>" alt="Reba Book Society"><span class="story-place">COLLEGE STREET<br>KOLKATA, INDIA</span></div></div><div class="story-copy"><p class="overline">OUR STORY</p><h2>From a street<br>that lives <em>for books.</em></h2><p>In Kolkata, College Street is more than a place. It’s a world of bookstalls, conversations and discoveries. That’s where you’ll find Reba Book Society, an independent publisher and bookseller.</p><a class="button outline" href="<?= e(url('about')) ?>">Get to know Reba <?= icon('arrow') ?></a></div></section>
 <section class="closing"><span class="closing-rule"></span><p>FOR READERS, EVERYWHERE</p><h2>Stay curious. <em>Keep reading.</em></h2><a href="<?= e(url('shop')) ?>" class="under-link">Back to the books ↗</a></section>
 <?php elseif($page==='shop'):
- $q=is_string($_GET['q']??null) ? trim($_GET['q']) : ''; $category=is_string($_GET['category']??null) ? $_GET['category'] : 'All books'; $filtered=array_filter($books,fn($b)=>($category==='All books'||$b['category']===$category) && ($q==='' || stripos($b['title'].' '.$b['author'].' '.$b['category'].' '.$b['isbn'],$q)!==false || (preg_match('/^[0-9 -]*[0-9][0-9 -]*$/', $q) && str_contains(str_replace('-', '', $b['isbn']), str_replace(['-', ' '], '', $q))))); ?>
-<section class="collection section-wrap shop-page" id="collection"><div class="section-heading"><div><p class="overline">THE BOOKSHOP</p><h1>Find your next read<span>.</span></h1><p>Classics, poetry, drama and more, from our shelves to yours.</p></div></div><div class="shop-tools"><div class="filters"><?php foreach(['All books','Fiction','Poetry','Drama','Literary Studies'] as $c): ?><a class="<?= $category===$c?'selected':'' ?>" href="<?= e(url('shop',['category'=>$c,'q'=>$q])) ?>#collection"><?= e($c) ?></a><?php endforeach; ?></div><form class="search-form" method="get" action="<?= e(url('shop')) ?>"><input type="hidden" name="category" value="<?= e($category) ?>"><label for="search" class="sr-only">Search books</label><input id="search" name="q" placeholder="Search title, author or ISBN" value="<?= e($q) ?>"><button aria-label="Search"><?= icon('search') ?></button></form></div><div class="catalogue-line"><span>THE COLLECTION &nbsp; / &nbsp; <?= count($filtered) ?> <?= count($filtered) === 1 ? 'TITLE' : 'TITLES' ?></span></div><div class="book-grid"><?php $i=0; foreach($filtered as $id=>$b) bookCard($id,$b,$i++); ?></div><?php if(!$filtered): ?><div class="empty">No books found. Try another search or category. <a href="<?= e(url('shop')) ?>#collection">View all books</a></div><?php endif; ?><p class="pricing-note">Prices shown are indicative starter prices and will be confirmed with your order request.</p></section>
+ $q=is_string($_GET['q']??null) ? trim($_GET['q']) : '';
+ $categories=selectedCategories();
+ $filtered=array_filter($books,fn($b)=>(!$categories || in_array($b['category'],$categories,true)) && ($q==='' || stripos($b['title'].' '.$b['author'].' '.$b['category'].' '.$b['isbn'],$q)!==false || (preg_match('/^[0-9 -]*[0-9][0-9 -]*$/', $q) && str_contains(str_replace('-', '', $b['isbn']), str_replace(['-', ' '], '', $q))))); ?>
+<section class="collection section-wrap shop-page" id="collection"><div class="section-heading"><div><p class="overline">THE BOOKSHOP</p><h1>Find your next read<span>.</span></h1><p>Classics, poetry, drama and more, from our shelves to yours.</p></div></div><div class="shop-layout"><aside class="shop-sidebar" aria-label="Filter books"><form method="get" action="<?= e(url('shop')) ?>#collection" class="category-form"><fieldset><legend>Categories</legend><p>Choose one or more.</p><?php foreach(REBA_CATEGORIES as $c): ?><label class="category-option"><input type="checkbox" name="category[]" value="<?= e($c) ?>" <?= in_array($c,$categories,true)?'checked':'' ?>><span><?= e($c) ?></span></label><?php endforeach; ?></fieldset><?php if($q!==''): ?><input type="hidden" name="q" value="<?= e($q) ?>"><?php endif; ?><button class="button outline category-apply" type="submit">Apply Filters</button><?php if($categories): ?><a class="category-clear" href="<?= e(url('shop',$q!==''?['q'=>$q]:[])) ?>#collection">Clear Categories</a><?php endif; ?></form></aside><div class="shop-results"><div class="shop-search"><form class="search-form" method="get" action="<?= e(url('shop')) ?>#collection"><?php foreach($categories as $c): ?><input type="hidden" name="category[]" value="<?= e($c) ?>"><?php endforeach; ?><label for="search" class="sr-only">Search books</label><input id="search" name="q" placeholder="Search title, author or ISBN" value="<?= e($q) ?>"><button aria-label="Search"><?= icon('search') ?></button></form></div><div class="catalogue-line"><span>THE COLLECTION &nbsp; / &nbsp; <?= count($filtered) ?> <?= count($filtered) === 1 ? 'TITLE' : 'TITLES' ?></span></div><div class="book-grid"><?php $i=0; foreach($filtered as $id=>$b) bookCard($id,$b,$i++); ?></div><?php if(!$filtered): ?><div class="empty">No books found. Try another search or category. <a href="<?= e(url('shop')) ?>#collection">View all books</a></div><?php endif; ?><p class="pricing-note">Prices shown are indicative starter prices and will be confirmed with your order request.</p></div></div></section>
 <?php elseif($page==='book' && isset($books[$_GET['id']??''])): $id=$_GET['id']; $b=$books[$id]; ?>
 <section class="inner section-wrap"><p class="breadcrumbs"><a href="<?= e(url()) ?>">Home</a> / <a href="<?= e(url('shop')) ?>">Books</a> / <?= e($b['title']) ?></p><div class="product-detail"><fieldset class="cover-gallery">
  <legend class="sr-only">Choose a cover image</legend>

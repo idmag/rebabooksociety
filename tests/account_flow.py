@@ -15,7 +15,7 @@ import tempfile
 import time
 import unittest
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, parse_qs, urlsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -294,6 +294,54 @@ class AccountFlow(unittest.TestCase):
         self.post(c, "/login", {"csrf": csrf(login), "action": "login", "email": "clear-wishlist@example.test", "password": "reading123"})
         page, _ = self.get(c, "/wishlist")
         self.assertIn('Your wishlist is empty.', page)
+
+    def test_shop_multi_category_filters(self):
+        c = client()
+        page, _ = self.get(c, "/shop")
+        sidebar = page.split('<aside class="shop-sidebar"', 1)[1].split('</aside>', 1)[0]
+        self.assertEqual(sidebar.count('type="checkbox" name="category[]"'), 4)
+        self.assertNotIn(' checked', sidebar)
+        self.assertIn('Apply Filters', sidebar)
+        self.assertEqual(page.count('class="book-card"'), 7)
+        query = urlencode([('category[]', 'Drama'), ('category[]', 'Fiction')])
+        page, _ = self.get(c, "/shop?" + query)
+        sidebar = page.split('<aside class="shop-sidebar"', 1)[1].split('</aside>', 1)[0]
+        self.assertIn('value="Drama" checked', sidebar)
+        self.assertIn('value="Fiction" checked', sidebar)
+        self.assertNotIn('value="Poetry" checked', sidebar)
+        for book in ('perseus', 'justice', 'awakening', 'old-man-and-the-sea'):
+            self.assertIn('id="product-' + book + '"', page)
+        for book in ('history', 'wasteland', 'biographia'):
+            self.assertNotIn('id="product-' + book + '"', page)
+        search = page.split('<form class="search-form"', 1)[1].split('</form>', 1)[0]
+        self.assertIn('name="category[]" value="Drama"', search)
+        self.assertIn('name="category[]" value="Fiction"', search)
+        page, _ = self.get(c, "/shop?" + query + '&q=Sea')
+        self.assertEqual(page.count('class="book-card"'), 1)
+        self.assertIn('id="product-old-man-and-the-sea"', page)
+        self.assertIn('name="q" value="Sea"', page)
+        self.assertIn('href="/shop?q=Sea#collection">Clear Categories', page)
+        # Existing single-category links and search continue to work.
+        page, _ = self.get(c, '/shop?category=Poetry&q=Eliot')
+        self.assertIn('id="product-wasteland"', page)
+        self.assertEqual(page.count('class="book-card"'), 1)
+        # Fallback form submissions retain all filters and the search term.
+        query = urlencode([('category[]', 'Drama'), ('category[]', 'Fiction'), ('q', 'Sea')])
+        page, _ = self.get(c, '/shop?' + query)
+        page, final = self.post(c, '/shop?' + query, {"csrf": csrf(page), "action": "add", "id": "old-man-and-the-sea", "return": "shop"})
+        args = parse_qs(urlsplit(final).query)
+        self.assertEqual([args['category[0]'][0], args['category[1]'][0]], ['Drama', 'Fiction'])
+        self.assertEqual(args['q'], ['Sea'])
+        self.assertEqual(page.count('class="book-card"'), 1)
+        page, final = self.post(c, '/shop?' + query, {"csrf": csrf(page), "action": "wishlist_toggle", "id": "old-man-and-the-sea", "set": "1", "return": "shop"})
+        args = parse_qs(urlsplit(final).query)
+        self.assertEqual([args['category[0]'][0], args['category[1]'][0]], ['Drama', 'Fiction'])
+        self.assertEqual(args['q'], ['Sea'])
+        self.assertIn('id="product-old-man-and-the-sea"', page)
+        # Invalid or repeated checkbox values are safely ignored or deduplicated.
+        page, _ = self.get(c, '/shop?category%5B%5D=Drama&category%5B%5D=Drama&category%5B%5D=Invalid&category%5Bbad%5D%5Bx%5D=Drama')
+        self.assertEqual(page.count('class="book-card"'), 2)
+        self.assertIn('value="Drama" checked', page)
 
     def test_home_featured_books(self):
         page, _ = self.get(client(), "/")
