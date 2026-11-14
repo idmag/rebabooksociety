@@ -301,7 +301,12 @@ class AccountFlow(unittest.TestCase):
         sidebar = page.split('<aside class="shop-sidebar"', 1)[1].split('</aside>', 1)[0]
         self.assertEqual(sidebar.count('type="checkbox" name="category[]"'), 4)
         self.assertNotIn(' checked', sidebar)
-        self.assertIn('Apply Filters', sidebar)
+        self.assertNotIn('Apply Filters', sidebar)
+        self.assertIn('<noscript><button', sidebar)
+        self.assertIn('shop-filter.js', page)
+        with urlopen(self.base + '/assets/shop-filter.js') as response:
+            self.assertEqual(response.status, 200)
+            self.assertIn(b'change', response.read())
         self.assertEqual(page.count('class="book-card"'), 7)
         query = urlencode([('category[]', 'Drama'), ('category[]', 'Fiction')])
         page, _ = self.get(c, "/shop?" + query)
