@@ -1,11 +1,34 @@
 <?php
 declare(strict_types=1);
 
+// A private JSON file supports shared hosts that cannot set PHP environment variables.
+// It lives beside the customer data, never in the website directory.
+function googlePrivateConfig(): array {
+ $path=getenv('REBA_STORAGE_DIR') ?: dirname(__DIR__).'/reba-book-society-data';
+ $directory=realpath($path); $root=realpath($_SERVER['DOCUMENT_ROOT']??__DIR__);
+ if (!$directory || !$root || !is_dir($directory) || $directory===$root || str_starts_with($directory,rtrim($root,DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR)) return [];
+ $file=$directory.'/google-config.json';
+ if (is_link($file) || !is_file($file) || realpath($file)!==$file || !is_readable($file)) return [];
+ $size=filesize($file);
+ if ($size===false || $size>8192) return [];
+ $contents=@file_get_contents($file);
+ if (!is_string($contents)) return [];
+ $config=json_decode($contents,true);
+ return is_array($config) ? $config : [];
+}
 // OAuth configuration is private server configuration, never browser supplied.
 function googleConfig(): ?array {
  $id=trim((string)getenv('REBA_GOOGLE_CLIENT_ID'));
  $secret=trim((string)getenv('REBA_GOOGLE_CLIENT_SECRET'));
- $base=rtrim(trim((string)getenv('REBA_BASE_URL')), '/');
+ $base=trim((string)getenv('REBA_BASE_URL'));
+ // Use an entire configuration source, never mix credentials from different clients.
+ if ($id==='' || $secret==='' || $base==='') {
+  $config=googlePrivateConfig();
+  $id=is_string($config['client_id']??null)?trim($config['client_id']):'';
+  $secret=is_string($config['client_secret']??null)?trim($config['client_secret']):'';
+  $base=is_string($config['base_url']??null)?trim($config['base_url']):'';
+ }
+ $base=rtrim($base, '/');
  $parts=parse_url($base);
  if (!preg_match('/\A[0-9]+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com\z/', $id) || $secret==='' || strlen($secret)>1024 || preg_match('/[\r\n]/', $secret) || !filter_var($base,FILTER_VALIDATE_URL) || !is_array($parts) || ($parts['scheme']??'')!=='https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || !function_exists('curl_init')) return null;
  return ['id'=>$id,'secret'=>$secret,'redirect'=>$base.'/google-callback'];

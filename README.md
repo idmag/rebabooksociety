@@ -69,6 +69,18 @@ REBA_GOOGLE_CLIENT_ID=your-google-oauth-client-id
 REBA_GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
 ```
 
+On shared hosting without PHP environment variables, the alternative is to create `google-config.json` in the **private customer-data directory** (`reba-book-society-data`, a sibling of the website directory by default, or `REBA_STORAGE_DIR` if configured). This directory must be outside **all** web-accessible document roots, not just this site's root. It must be private to the PHP account; use directory permissions `700` and file permissions `600` where supported. Never put the configuration file in `public_html`, Git, or any public or shared backup. The application refuses to load a file in the current document root and ignores symlinks, but the host must verify that no other website can serve the directory.
+
+```json
+{
+  "base_url": "https://rebabooksociety.websolve.co.in",
+  "client_id": "your-google-oauth-client-id",
+  "client_secret": "your-google-oauth-client-secret"
+}
+```
+
+If all three environment variables are present, they take precedence. Otherwise the private file is used as a complete configuration; it is not mixed with partial environment settings. This file configures Google only and does not set the base URL used by password recovery.
+
 Use the actual confirmed site URL with no trailing slash. The Client ID and secret must be from the same Google Web client. Never commit the secret, send it in chat, or place it in the web root. Restart PHP if needed for environment changes to take effect. PHP needs the cURL extension, a trusted CA bundle and outbound HTTPS access to `oauth2.googleapis.com` and `openidconnect.googleapis.com`. Configure HTTPS, secure session cookies (including behind proxies), and exclude query strings on `/google-callback` from web-server, proxy and analytics logs. Google authorization codes and tokens must not be logged. The callback URL must match Google Cloud exactly. If disabled or incomplete, the normal sign-in remains available.
 
 The app uses an authorization code with PKCE, a one-time state and Google's HTTPS userinfo endpoint; Google must report a verified email. It identifies returning Google accounts by Google's stable subject, not by email. An existing email/password account is **not** automatically linked: sign in with its password, then use **Link Google** in account settings with a Google account of the same email. If needed, use password recovery first. This prevents an unverified pre-existing account from silently gaining access. Guest wishlists are merged when signing in. New Google accounts may set an email password via password recovery. For account recovery, resetting a password signs out other sessions **and unlinks Google**; sign in with the new password and link Google again. Google sign-in alone does not activate administrator privileges; the existing mailbox verification process still applies.

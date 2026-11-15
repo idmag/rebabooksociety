@@ -2,6 +2,7 @@
 Run: PHP_BIN=/path/to/php python3 tests/google_oauth_flow.py
 """
 import http.cookiejar
+import json
 import os
 from pathlib import Path
 import re
@@ -84,5 +85,54 @@ class OAuthFlow(unittest.TestCase):
         state=parse_qs(urlsplit(location).query)['state'][0]
         self.assertEqual(self.request('/google-callback?'+urlencode({'state':state,'error':'access_denied'})).headers['Location'],'/login')
         self.assertEqual(self.request('/google-callback?'+urlencode({'state':state,'code':'fake'})).headers['Location'],'/login')
+
+class PrivateConfigFlow(unittest.TestCase):
+    def test_private_file_enables_sign_in_and_bad_files_do_not(self):
+        with tempfile.TemporaryDirectory(prefix='reba-oauth-private-') as tmp:
+            private=Path(tmp)/'private'; private.mkdir(mode=0o700)
+            config=private/'google-config.json'
+            config.write_text(json.dumps({'base_url':'https://example.test','client_id':'12345-example.apps.googleusercontent.com','client_secret':'private-test-secret'}))
+            config.chmod(0o600)
+            # A path within a document root must never supply secrets.
+            code='require "google-oauth.php"; $_SERVER["DOCUMENT_ROOT"]=$argv[1]; putenv("REBA_STORAGE_DIR=".$argv[2]); echo googlePrivateConfig() ? "unsafe" : "blocked";'
+            result=subprocess.run([os.environ.get('PHP_BIN','php'),'-r',code,tmp,str(private)],cwd=ROOT,capture_output=True,text=True,check=True)
+            self.assertEqual(result.stdout,'blocked')
+            with socket.socket() as sock:
+                sock.bind(('127.0.0.1',0)); port=sock.getsockname()[1]
+            env=os.environ.copy()
+            for key in ('REBA_BASE_URL','REBA_GOOGLE_CLIENT_ID','REBA_GOOGLE_CLIENT_SECRET'): env.pop(key,None)
+            env['REBA_STORAGE_DIR']=str(private)
+            with open(Path(tmp)/'log','w+') as log:
+                server=subprocess.Popen([env.get('PHP_BIN','php'),'-S',f'127.0.0.1:{port}','-t','.','router.php'],cwd=ROOT,env=env,stdout=log,stderr=log)
+                base=f'http://127.0.0.1:{port}'
+                client=build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()),NoRedirect())
+                deadline=time.monotonic()+20
+                try:
+                    while True:
+                        try:
+                            page=client.open(base+'/login',timeout=1).read().decode(); break
+                        except (OSError,URLError):
+                            if server.poll() is not None or time.monotonic()>deadline: raise RuntimeError('Server failed to start')
+                            time.sleep(.05)
+                    self.assertIn('Continue with Google',page)
+                    self.assertNotIn('private-test-secret',page)
+                    token=re.search(r'name="csrf" value="([^"]+)',page).group(1)
+                    try:
+                        client.open(Request(base+'/login',urlencode({'csrf':token,'action':'google_start'}).encode()))
+                    except HTTPError as response:
+                        self.assertEqual(response.code,302)
+                        query=parse_qs(urlsplit(response.headers['Location']).query)
+                        self.assertEqual(query['redirect_uri'],['https://example.test/google-callback'])
+                        self.assertNotIn('private-test-secret',response.headers['Location'])
+                        response.close()
+                    config.write_text('{broken')
+                    self.assertNotIn('Continue with Google',client.open(base+'/login').read().decode())
+                    config.unlink()
+                    target=private/'other.json'
+                    target.write_text(json.dumps({'base_url':'https://example.test','client_id':'12345-example.apps.googleusercontent.com','client_secret':'private-test-secret'}))
+                    config.symlink_to(target)
+                    self.assertNotIn('Continue with Google',client.open(base+'/login').read().decode())
+                finally:
+                    server.terminate(); server.wait(timeout=10)
 
 if __name__=='__main__': unittest.main()
