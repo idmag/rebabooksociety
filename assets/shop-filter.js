@@ -50,9 +50,10 @@
       const nextSearch = nextResults.querySelector('.search-form input[name="q"]');
       const nextSearchClear = nextResults.querySelector('[data-clear-search]');
       const oldSort = previousResults.querySelector('[data-sort-select]');
+      const oldSortTrigger = previousResults.querySelector('[data-sort-trigger]');
       const nextSort = nextResults.querySelector('[data-sort-select]');
       appliedSort = nextSort ? nextSort.value : 'recommended';
-      const restoreSortFocus = oldSort && document.activeElement === oldSort;
+      const restoreSortFocus = document.activeElement === oldSort || (oldSortTrigger && oldSortTrigger.parentElement.contains(document.activeElement));
       const restoreFocus = focusSearch || (oldSearch && document.activeElement === oldSearch);
       // Do not discard text typed while the request was in flight.
       if (oldSearch && nextSearch && oldSearch.value !== initialValue) {
@@ -60,15 +61,16 @@
         if (nextSearchClear) nextSearchClear.hidden = !nextSearch.value;
       }
       previousResults.replaceWith(nextResults);
+      document.dispatchEvent(new Event('shop:updated'));
       if (restoreFocus && nextSearch) nextSearch.focus({preventScroll: true});
-      else if (restoreSortFocus && nextSort) nextSort.focus({preventScroll: true});
+      else if (restoreSortFocus && nextSort) (nextResults.querySelector('[data-sort-trigger]') || nextSort).focus({preventScroll: true});
       if (pushHistory) history.pushState(null, '', url.pathname + url.search + location.hash);
     } catch (err) {
       if (err.name === 'AbortError' || current !== sequence) return;
       if (!pushHistory) { location.reload(); return; }
       checkboxes().forEach(box => { box.checked = applied.includes(box.value); });
       const sort = document.querySelector('[data-sort-select]');
-      if (sort) sort.value = appliedSort;
+      if (sort) { sort.value = appliedSort; sort.dispatchEvent(new Event('shop:sort-sync')); }
       if (focusSearch) {
         const search = document.querySelector('.shop-search .search-form input[name="q"]');
         const clear = document.querySelector('[data-clear-search]');

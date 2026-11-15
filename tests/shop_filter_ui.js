@@ -28,8 +28,8 @@ const vm = require('vm');
   }
   let search = makeSearch('Sea');
   function makeResults(url, searchState, sortValue = 'recommended') {
-    const sort = {value: sortValue, matches: selector => selector === '[data-sort-select]', focus(options) { assert.equal(options.preventScroll, true); }};
-    return {url, searchState, sort, setAttribute() {}, removeAttribute() {}, replaceWith(next) { results = next; search = next.searchState; }, querySelector(selector) { return selector === '.search-form input[name="q"]' ? this.searchState.input : selector === '[data-sort-select]' ? this.sort : this.searchState.cross; }};
+    const sort = {value: sortValue, dispatchEvent() {}, matches: selector => selector === '[data-sort-select]', focus(options) { assert.equal(options.preventScroll, true); }};
+    return {url, searchState, sort, setAttribute() {}, removeAttribute() {}, replaceWith(next) { results = next; search = next.searchState; }, querySelector(selector) { return selector === '.search-form input[name="q"]' ? this.searchState.input : selector === '[data-sort-select]' ? this.sort : selector === '[data-clear-search]' ? this.searchState.cross : null; }};
   }
   let results = makeResults('', search);
   const location = new URL('https://example.test/shop#collection');
@@ -39,7 +39,8 @@ const vm = require('vm');
   const document = {
     querySelector(selector) { return selector === '.category-form' ? form : selector === '.shop-results' ? results : selector === '.shop-search .search-form input[name="q"]' ? search.input : selector === '[data-clear-search]' ? search.cross : selector === '[data-sort-select]' ? results.sort : null; },
     addEventListener: (name, handler) => { documentHandlers[name] = handler; },
-    createElement() { return {}; }
+    createElement() { return {}; },
+    dispatchEvent() {}
   };
   class FakeFormData {
     *[Symbol.iterator]() { for (const box of boxes) if (box.checked) yield ['category[]', box.value]; if (queryInput) yield ['q', queryInput.value]; if (sortInput) yield ['sort', sortInput.value]; }
@@ -63,7 +64,7 @@ const vm = require('vm');
     }
   }
   const context = {
-    document, location, URL, URLSearchParams, AbortController, FormData: FakeFormData, DOMParser: FakeDOMParser,
+    document, location, URL, URLSearchParams, AbortController, Event, FormData: FakeFormData, DOMParser: FakeDOMParser,
     history: {pushState(_, __, path) { pushes.push(path); location.href = new URL(path, location.href); }},
     window: {addEventListener: (name, fn) => { windowHandlers[name] = fn; }},
     fetch: async url => {
