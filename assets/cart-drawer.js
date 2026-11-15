@@ -2,6 +2,7 @@
   const toggle = document.querySelector('[data-cart-drawer-toggle]');
   const drawer = document.querySelector('[data-cart-drawer]');
   const body = drawer && drawer.querySelector('[data-drawer-body]');
+  const countLabel = drawer && drawer.querySelector('[data-drawer-count]');
   if (!toggle || !drawer || !body || typeof drawer.showModal !== 'function') return;
   const desktop = window.matchMedia('(min-width: 621px)');
   let request, sequence = 0;
@@ -22,6 +23,8 @@
     request = new AbortController();
     const current = ++sequence;
     body.setAttribute('aria-busy', 'true');
+    // The preview may refresh while a link inside it has keyboard focus.
+    if (body.contains(document.activeElement)) drawer.querySelector('[data-drawer-close]').focus({preventScroll: true});
     body.innerHTML = '<p class="drawer-loading">Loading your cart…</p>';
     try {
       const url = new URL(toggle.href, location.href);
@@ -35,7 +38,10 @@
       body.replaceChildren(fragment);
       const count = Number(fragment.dataset.count);
       const badge = document.querySelector('[data-cart-badge]');
-      if (badge && Number.isInteger(count) && count >= 0) { badge.textContent = count; badge.hidden = count === 0; }
+      if (Number.isInteger(count) && count >= 0) {
+        if (badge) { badge.textContent = count; badge.hidden = count === 0; }
+        if (countLabel) { countLabel.textContent = `${count} ${count === 1 ? 'item' : 'items'}`; countLabel.hidden = count === 0; }
+      }
     } catch (error) {
       if (error.name === 'AbortError' || current !== sequence || !drawer.open) return;
       body.innerHTML = '<div class="drawer-error"><p>We couldn’t load your cart just now.</p><button type="button" data-drawer-retry>Try again</button></div>';
