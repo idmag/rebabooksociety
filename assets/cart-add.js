@@ -39,7 +39,6 @@
         if (result.success) animateChange(quantity);
         const badge = document.querySelector('[data-cart-badge]');
         if (badge) { badge.textContent = result.cartCount; badge.hidden = result.cartCount <= 0; if (result.success) animateChange(badge); }
-        if (result.success) document.dispatchEvent(new Event('cart:updated'));
         message.textContent = result.message;
         feedback.classList.toggle('cart-feedback--error', !result.success);
       } catch (_) {

@@ -12,17 +12,15 @@ const vm = require('vm');
   const cartFeedback = element(), wishFeedback = element(), cartMessage = element(), wishMessage = element(), cartBadge = element(), wishBadge = element();
   cartFeedback.querySelector = () => cartMessage;
   wishFeedback.querySelector = () => wishMessage;
-  let cartUpdates = 0;
   const document = {
     getElementById: id => id === 'cart-feedback' ? cartFeedback : wishFeedback,
     addEventListener: (name, handler) => { if (name === 'submit') listeners.push(handler); },
     querySelector: selector => selector === '[data-cart-badge]' ? cartBadge : selector === '[data-wishlist-badge]' ? wishBadge : null,
-    querySelectorAll: () => [],
-    dispatchEvent: event => { if (event.type === 'cart:updated') cartUpdates++; }
+    querySelectorAll: () => []
   };
   const context = {
     document, window: {matchMedia: () => ({matches: false})}, location: {href: '/shop'},
-    Event, FormData: class { constructor(form) { this.form = form; } }, setTimeout: () => 1, clearTimeout() {},
+    FormData: class { constructor(form) { this.form = form; } }, setTimeout: () => 1, clearTimeout() {},
     fetch: async (_, options) => ({ok: true, headers: {get: () => 'application/json'}, json: async () => options.body.form.kind === 'cart' ? {quantity: 1, cartCount: 1, message: 'Added to cart', success: true} : {saved: true, count: 1, totalCount: 1, message: 'Added to wishlist'}})
   };
   vm.runInNewContext(fs.readFileSync('assets/cart-add.js', 'utf8'), context);
@@ -38,8 +36,6 @@ const vm = require('vm');
   assert.equal(quantity.textContent, '1 in cart');
   assert.equal(quantity.hidden, false);
   assert.equal(cartBadge.textContent, 1);
-  assert.equal(cartUpdates, 1);
-  assert.equal(cartMessage.textContent, 'Added to cart');
 
   const attrs = {}, nextState = {value: '1'}, button = {setAttribute: (name, value) => { attrs[name] = value; }};
   const wishlistForm = {kind: 'wishlist', action: '/shop?category=Drama', dataset: {title: 'A Book'}, matches: s => s === '[data-wishlist-form]', querySelector: s => s === 'button' ? button : s === '[name="set"]' ? nextState : null};

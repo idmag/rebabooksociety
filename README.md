@@ -37,10 +37,6 @@ Customer accounts and orders are stored in `data.json` in a **private directory 
 
 Use HTTPS in production. PHP sessions must be configured to use a private server-side session directory. Passwords are stored using PHP's `password_hash` and checked using `password_verify`; they are never stored as plain text.
 
-### Cart preview
-
-On desktop, the header shopping-bag link opens an accessible slide-out preview with a link to the full cart. On smaller screens, with JavaScript disabled, or when browser dialog support is unavailable, the link opens the full cart directly. The preview reads current session contents on opening; prices and stock status come from the current catalogue. The full cart remains responsible for editing and checkout.
-
 ### Wishlists
 
 Customers can save books using the heart buttons and review or remove them at `/wishlist`. A guest wishlist is kept in their browser session; signing in or registering merges it into their account so it persists across devices. Signed-in wishlists are stored with the account in the private data file. Books removed from the shop are hidden from the wishlist until restored; out-of-stock books can still be saved. Wishlist data is not shared between accounts.
