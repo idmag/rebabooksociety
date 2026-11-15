@@ -24,6 +24,7 @@ location ~ /\. { deny all; }
 location ^~ /storage/ { deny all; }
 location ^~ /tests/ { deny all; }
 location = /router.php { deny all; }
+location = /google-oauth.php { deny all; }
 ```
 
 If the site is installed in a subdirectory, adjust the Nginx front-controller path to include that subdirectory. Do not serve repository metadata, `router.php`, `tests/`, or the legacy `storage/` directory in production. The contact page lists the supplied mobile / WhatsApp number and shop address.
@@ -56,6 +57,24 @@ It must be the actual HTTPS site URL, without a trailing slash, query string, or
 
 The isolated account integration test can be run with `python3 tests/account_flow.py` (set `PHP_BIN` if PHP is not on your PATH). It uses a temporary private data file and disables actual mail delivery; it does not verify your server’s email transport. The filter and dynamic-card interaction checks can be run with `node tests/shop_filter_ui.js`, `node tests/mobile_filters_ui.js`, and `node tests/shop_actions_ui.js`.
 
+### Google sign-in
+
+Google sign-in is optional and appears on the sign-in and registration pages only when configured. In Google Cloud, create an OAuth **Web application** client and set its authorized redirect URI to the actual HTTPS site URL followed by `/google-callback`, for example `https://rebabooksociety.websolve.co.in/google-callback` if installed at that domain root. Include the subdirectory if there is one. Enable External access and add test users while in Testing mode; publishing and Google verification may be needed before customers can use it.
+
+Set these **server-side environment variables** in the hosting panel or PHP-FPM configuration (not in repository files or public HTML):
+
+```text
+REBA_BASE_URL=https://rebabooksociety.websolve.co.in
+REBA_GOOGLE_CLIENT_ID=your-google-oauth-client-id
+REBA_GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+```
+
+Use the actual confirmed site URL with no trailing slash. The Client ID and secret must be from the same Google Web client. Never commit the secret, send it in chat, or place it in the web root. Restart PHP if needed for environment changes to take effect. PHP needs the cURL extension, a trusted CA bundle and outbound HTTPS access to `oauth2.googleapis.com` and `openidconnect.googleapis.com`. Configure HTTPS, secure session cookies (including behind proxies), and exclude query strings on `/google-callback` from web-server, proxy and analytics logs. Google authorization codes and tokens must not be logged. The callback URL must match Google Cloud exactly. If disabled or incomplete, the normal sign-in remains available.
+
+The app uses an authorization code with PKCE, a one-time state and Google's HTTPS userinfo endpoint; Google must report a verified email. It identifies returning Google accounts by Google's stable subject, not by email. An existing email/password account is **not** automatically linked: sign in with its password, then use **Link Google** in account settings with a Google account of the same email. If needed, use password recovery first. This prevents an unverified pre-existing account from silently gaining access. Guest wishlists are merged when signing in. New Google accounts may set an email password via password recovery. For account recovery, resetting a password signs out other sessions **and unlinks Google**; sign in with the new password and link Google again. Google sign-in alone does not activate administrator privileges; the existing mailbox verification process still applies.
+
+Test the entire process on the deployed HTTPS site with a Google test user (including existing-account linking, a new account and checkout). Automated tests use synthetic credentials and do not contact Google, and cannot verify your live configuration or mail delivery. Run `php tests/google_oauth_unit.php` and `python3 tests/google_oauth_flow.py` (set `PHP_BIN` if needed).
+
 ### Administrator and inventory
 
 The administrator is `ahmadmdujan@gmail.com`. Registration alone does **not** grant privileges: registration currently does not verify email addresses, so assigning admin rights by email alone would allow impersonation. After deployment, the mailbox owner should register or use their existing account, use **Forgot your password?** with that address, follow the email link, set a new password, and sign in. Successfully completing that email-based reset verifies control of the mailbox and activates admin access. It also invalidates any previously active sessions. Email recovery must be operational as described above; no admin password is embedded in the site.
@@ -70,4 +89,4 @@ The catalogue prices are illustrative starter prices and should be verified in t
 
 ### Deploying visual updates
 
-Deploy `index.php` and the entire `assets/` directory together, including `storefront.css`, `college-street.jpg`, and the logo files. The stylesheet URL includes a content-based version to prevent browsers from reusing an older design with newer page markup. If a CDN or reverse proxy caches HTML, purge that cache after deploying; make sure the server actually serves the current files.
+Deploy `index.php`, `google-oauth.php`, and the entire `assets/` directory together, including `storefront.css`, `college-street.jpg`, and the logo files. The stylesheet URL includes a content-based version to prevent browsers from reusing an older design with newer page markup. If a CDN or reverse proxy caches HTML, purge that cache after deploying; make sure the server actually serves the current files.

@@ -646,10 +646,14 @@ class AccountFlow(unittest.TestCase):
         uid = next(u["id"] for u in data["users"] if u["email"] == "short-password@example.test")
         raw = "c" * 64
         data["password_resets"] = {hashlib.sha256(raw.encode()).hexdigest(): {"user_id": uid, "expires": int(time.time()) + 1800}}
+        next(u for u in data["users"] if u["id"] == uid)["google_sub"] = "old-linked-google-id"
         data_file.write_text(json.dumps(data))
         page, _ = self.get(c, "/reset-password?token=" + raw)
         page, _ = self.post(c, "/reset-password", {"csrf": csrf(page), "action": "reset_password", "token": raw, "new_password": "123456", "confirm_password": "123456"})
         self.assertIn("Your password has been reset", page)
+        self.assertIn("link Google again", page)
+        account = next(u for u in json.loads(data_file.read_text())["users"] if u["id"] == uid)
+        self.assertNotIn("google_sub", account)
         page, url = self.post(c, "/login", {"csrf": csrf(page), "action": "login", "email": "short-password@example.test", "password": "123456"})
         self.assertTrue(url.endswith("/account"))
 
