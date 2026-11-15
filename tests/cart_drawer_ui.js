@@ -7,7 +7,7 @@ const {JSDOM} = require('jsdom');
   const dom = new JSDOM(`<!doctype html><body>
   <a data-cart-drawer-toggle href="/cart">Bag <span data-cart-badge hidden>0</span></a>
   <dialog data-cart-drawer id="cart-drawer" aria-labelledby="cart-drawer-title">
-    <h2 id="cart-drawer-title">Your cart</h2><button data-drawer-close>Close</button>
+    <h2 id="cart-drawer-title">Your cart</h2><p data-drawer-count hidden></p><button data-drawer-close>Close</button>
     <div data-drawer-body aria-live="polite"></div><a href="/cart">View Cart</a>
     <button data-drawer-close>Continue Shopping</button>
   </dialog>`, {url:'https://example.test/shop?category=Drama', runScripts:'outside-only'});
@@ -22,7 +22,7 @@ const {JSDOM} = require('jsdom');
     lastUrl = url; fetchCount++;
     if (wait) return new Promise(resolve => { wait = resolve; });
     if (fail) { fail = false; throw new Error('Offline'); }
-    return {ok:true, headers:{get:()=> 'text/html; charset=utf-8'}, text:async()=>'<div data-drawer-preview data-count="2">Two books</div>'};
+    return {ok:true, headers:{get:()=> 'text/html; charset=utf-8'}, text:async()=>'<div data-drawer-preview data-count="2"><a href="/book/one">Two books</a></div>'};
   };
   window.eval(fs.readFileSync('assets/cart-drawer.js', 'utf8'));
   const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -42,9 +42,13 @@ const {JSDOM} = require('jsdom');
   assert.equal(body.textContent.trim(),'Two books');
   assert.equal(badge.textContent,'2');
   assert.equal(badge.hidden,false);
+  assert.equal(drawer.querySelector('[data-drawer-count]').textContent,'2 items');
+  assert.equal(drawer.querySelector('[data-drawer-count]').hidden,false);
   assert(drawer.querySelector('a[href="/cart"]'));
+  body.querySelector('a').focus();
   document.dispatchEvent(new window.Event('cart:updated')); await tick();
   assert.equal(fetchCount,2);
+  assert.equal(document.activeElement,drawer.querySelector('[data-drawer-close]'));
   drawer.querySelector('[data-drawer-close]').click();
   assert(!drawer.open);
   assert.equal(toggle.getAttribute('aria-expanded'),'false');
