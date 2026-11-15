@@ -1,0 +1,3 @@
+# Defense in depth for installations upgrading from the old public/ layout.
+# Move all existing customer data outside the document root before deployment.
+Require all denied
