@@ -45,6 +45,7 @@
       if (subtotal.textContent !== result.subtotal) { subtotal.textContent = result.subtotal; animateChange(subtotal); }
       const badge = document.querySelector('[data-cart-badge]');
       if (badge) { if (Number(badge.textContent) !== result.cartCount) animateChange(badge); badge.textContent = result.cartCount; badge.hidden = result.cartCount <= 0; }
+      document.dispatchEvent(new Event('cart:updated'));
       dirty = false;
       status.textContent = 'Your bag has been updated.';
       animateChange(status);
