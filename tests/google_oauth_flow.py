@@ -47,6 +47,21 @@ class OAuthFlow(unittest.TestCase):
         except HTTPError as e: return e
     def csrf(self, path='/login'):
         page=self.request(path).read().decode(); return re.search(r'name="csrf" value="([^"]+)',page).group(1)
+    def test_auth_ui_keeps_checkout_and_google_actions(self):
+        page=self.request('/login?next=checkout').read().decode()
+        self.assertIn('class="auth-shell"',page)
+        self.assertIn('aria-current="page"',page)
+        self.assertIn('Continue with Google',page)
+        self.assertIn('name="action" value="google_start"',page)
+        self.assertEqual(page.count('name="next" value="checkout"'),2)
+        self.assertIn('/register?next=checkout',page)
+        self.assertIn('href="/forgot-password"',page)
+        register=self.request('/register?next=checkout').read().decode()
+        self.assertIn('name="action" value="register"',register)
+        self.assertIn('name="name"',register)
+        self.assertIn('Minimum 6 Characters',register)
+        self.assertIn('/login?next=checkout',register)
+
     def test_start_state_pkce_and_one_time_state(self):
         csrf=self.csrf()
         response=self.request('/login',{'csrf':csrf,'action':'google_start','next':'checkout'})
