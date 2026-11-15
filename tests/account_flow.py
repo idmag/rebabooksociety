@@ -392,6 +392,11 @@ class AccountFlow(unittest.TestCase):
         self.assertNotIn(' checked', sidebar)
         self.assertNotIn('Apply Filters', sidebar)
         self.assertIn('<noscript><button', sidebar)
+        self.assertIn('data-filter-toggle aria-expanded="false" aria-controls="shop-filters"', page)
+        self.assertIn('<aside class="shop-sidebar" id="shop-filters"', page)
+        self.assertIn('mobile-filters.js', page)
+        with urlopen(self.base + '/assets/mobile-filters.js') as response:
+            self.assertEqual(response.status, 200)
         self.assertIn('shop-filter.js', page)
         with urlopen(self.base + '/assets/shop-filter.js') as response:
             self.assertEqual(response.status, 200)
